@@ -1,0 +1,48 @@
+"""
+Application Configuration
+"""
+from pydantic_settings import BaseSettings
+from typing import List
+
+
+class Settings(BaseSettings):
+    # Database
+    DATABASE_URL: str
+    
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379/0"
+    
+    # JWT
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # AWS S3 / Cloudflare R2
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_REGION: str = "us-east-1"
+    S3_BUCKET_NAME: str = ""
+    S3_ENDPOINT_URL: str = ""  # For Cloudflare R2
+    
+    # CORS
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080"]
+    
+    # File Upload
+    MAX_UPLOAD_SIZE: int = 500 * 1024 * 1024  # 500MB
+    ALLOWED_VIDEO_FORMATS: List[str] = [".mp4", ".mov", ".avi"]
+    
+    # Celery
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    
+    # Environment
+    ENVIRONMENT: str = "development"
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+
+settings = Settings()
+

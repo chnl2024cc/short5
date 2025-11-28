@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for mobile-first design */
+html {
+  @apply h-full;
+}
+
+body {
+  @apply h-full overflow-hidden;
+}
+
+/* Swipe container styles */
+.swipe-container {
+  @apply relative w-full h-full overflow-hidden;
+  touch-action: pan-y;
+}
+
+/* Video player container */
+.video-container {
+  @apply relative w-full h-screen flex items-center justify-center bg-black;
+}
+
+/* Swipe overlay styles */
+.swipe-overlay {
+  @apply absolute inset-0 flex items-center justify-center pointer-events-none z-50;
+}
+
+.swipe-overlay.like {
+  @apply bg-green-500 bg-opacity-20;
+}
+
+.swipe-overlay.not-like {
+  @apply bg-red-500 bg-opacity-20;
+}
+
+.swipe-overlay-text {
+  @apply text-6xl font-bold text-white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
