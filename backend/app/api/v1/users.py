@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.api.v1.dependencies import get_current_user_required
 from app.models.user import User
 from app.models.video import Video
-from app.models.vote import Vote
+from app.models.vote import Vote, VoteDirection
 from app.models.view import View
 from app.schemas.video import VideoResponse, UserBasic, VideoStats
 
@@ -32,7 +32,7 @@ async def get_current_user_profile(
     likes_received = await db.execute(
         select(func.count(Vote.id))
         .join(Video)
-        .where(Video.user_id == current_user.id, Vote.direction == "like")
+        .where(Video.user_id == current_user.id, Vote.direction == VoteDirection.LIKE)
     )
     total_likes = likes_received.scalar() or 0
     
@@ -113,7 +113,7 @@ async def get_liked_videos(
     from sqlalchemy import and_
     
     query = (
-        select(Video, User)
+        select(Video, User, UserLikedVideo)
         .join(UserLikedVideo, Video.id == UserLikedVideo.video_id)
         .join(User, Video.user_id == User.id)
         .where(UserLikedVideo.user_id == current_user.id)
@@ -121,8 +121,14 @@ async def get_liked_videos(
     )
     
     if cursor:
-        # Parse cursor and add filter
-        query = query.where(UserLikedVideo.created_at < cursor)
+        # Parse cursor (ISO format datetime string)
+        try:
+            from datetime import datetime
+            cursor_time = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+            query = query.where(UserLikedVideo.created_at < cursor_time)
+        except Exception:
+            # If cursor parsing fails, ignore it
+            pass
     
     query = query.limit(min(limit, 100))
     
@@ -130,11 +136,11 @@ async def get_liked_videos(
     rows = result.all()
     
     videos = []
-    for video, user in rows:
+    for video, user, liked_video in rows:
         # Get stats
         likes_count = await db.execute(
             select(func.count(Vote.id)).where(
-                Vote.video_id == video.id, Vote.direction == "like"
+                Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
             )
         )
         views_count = await db.execute(
@@ -160,7 +166,77 @@ async def get_liked_videos(
             )
         )
     
-    next_cursor = str(rows[-1][0].created_at) if rows else None
+    # Use UserLikedVideo.created_at for cursor (when the user liked it)
+    next_cursor = rows[-1][2].created_at.isoformat() if rows else None
+    has_more = len(rows) == limit
+    
+    return {
+        "videos": videos,
+        "next_cursor": next_cursor,
+        "has_more": has_more,
+    }
+
+
+@router.get("/me/videos")
+async def get_my_videos(
+    current_user: User = Depends(get_current_user_required),
+    db: AsyncSession = Depends(get_db),
+    cursor: Optional[str] = None,
+    limit: int = 20,
+):
+    """Get current user's uploaded videos"""
+    query = (
+        select(Video, User)
+        .join(User, Video.user_id == User.id)
+        .where(Video.user_id == current_user.id)
+        .order_by(Video.created_at.desc())
+    )
+    
+    if cursor:
+        try:
+            from datetime import datetime
+            cursor_time = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+            query = query.where(Video.created_at < cursor_time)
+        except Exception:
+            pass
+    
+    query = query.limit(min(limit, 100))
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    videos = []
+    for video, user in rows:
+        # Get stats
+        likes_count = await db.execute(
+            select(func.count(Vote.id)).where(
+                Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
+            )
+        )
+        views_count = await db.execute(
+            select(func.count(View.id)).where(View.video_id == video.id)
+        )
+        
+        videos.append(
+            VideoResponse(
+                id=str(video.id),
+                title=video.title,
+                description=video.description,
+                status=video.status.value,
+                thumbnail=video.thumbnail,
+                url_hls=video.url_hls,
+                url_mp4=video.url_mp4,
+                duration_seconds=video.duration_seconds,
+                user=UserBasic(id=str(user.id), username=user.username),
+                stats=VideoStats(
+                    likes=likes_count.scalar() or 0,
+                    views=views_count.scalar() or 0,
+                ),
+                created_at=video.created_at,
+            )
+        )
+    
+    next_cursor = rows[-1][0].created_at.isoformat() if rows else None
     has_more = len(rows) == limit
     
     return {

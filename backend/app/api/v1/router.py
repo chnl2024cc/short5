@@ -12,5 +12,6 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(videos.router, prefix="/videos", tags=["videos"])
 api_router.include_router(feed.router, prefix="/feed", tags=["feed"])
-# api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+from app.api.v1 import admin
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 

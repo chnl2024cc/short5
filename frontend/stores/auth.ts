@@ -133,6 +133,36 @@ export const useAuthStore = defineStore('auth', {
         }
       }
     },
+
+    async fetchProfile() {
+      const api = useApi()
+      try {
+        const response = await api.get<{
+          id: string
+          username: string
+          email: string
+          created_at: string
+          stats: {
+            videos_uploaded: number
+            total_likes_received: number
+            total_views: number
+          }
+        }>('/users/me')
+        
+        // Update user in store
+        this.user = response
+        
+        // Update localStorage
+        if (process.client) {
+          localStorage.setItem('user', JSON.stringify(response))
+        }
+        
+        return response
+      } catch (error) {
+        console.error('Failed to fetch profile:', error)
+        throw error
+      }
+    },
   },
 })
 
