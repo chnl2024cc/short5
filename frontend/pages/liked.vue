@@ -262,7 +262,8 @@ onMounted(() => {
   if ('IntersectionObserver' in window) {
     observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore.value && !loading.value && nextCursor.value) {
+        const entry = entries[0]
+        if (entry && entry.isIntersecting && hasMore.value && !loading.value && nextCursor.value) {
           loadMore()
         }
       },

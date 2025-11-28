@@ -130,7 +130,7 @@
           <div class="flex items-center justify-between">
             <h2 class="text-xl font-bold">Pending Videos</h2>
             <button
-              @click="loadPendingVideos"
+              @click="() => loadPendingVideos()"
               class="text-blue-400 hover:text-blue-300 text-sm"
             >
               Refresh
@@ -268,7 +268,7 @@
             <div class="flex gap-2">
               <select
                 v-model="reportStatusFilter"
-                @change="loadReports"
+                @change="() => loadReports()"
                 class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700"
               >
                 <option value="">All Status</option>
@@ -277,7 +277,7 @@
                 <option value="dismissed">Dismissed</option>
               </select>
               <button
-                @click="loadReports"
+                @click="() => loadReports()"
                 class="text-blue-400 hover:text-blue-300 text-sm"
               >
                 Refresh
