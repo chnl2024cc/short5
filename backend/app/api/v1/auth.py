@@ -35,46 +35,57 @@ async def register(
     db: AsyncSession = Depends(get_db),
 ):
     """Register a new user"""
-    # Check if username exists
-    result = await db.execute(select(User).where(User.username == user_data.username))
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username already exists",
+    try:
+        # Check if username exists
+        result = await db.execute(select(User).where(User.username == user_data.username))
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already exists",
+            )
+        
+        # Check if email exists
+        result = await db.execute(select(User).where(User.email == user_data.email))
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already exists",
+            )
+        
+        # Create user
+        user = User(
+            username=user_data.username,
+            email=user_data.email,
+            password_hash=get_password_hash(user_data.password),
         )
-    
-    # Check if email exists
-    result = await db.execute(select(User).where(User.email == user_data.email))
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already exists",
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        
+        # Create tokens
+        access_token = create_access_token(data={"sub": str(user.id)})
+        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+        
+        return AuthResponse(
+            user=UserResponse(
+                id=str(user.id),
+                username=user.username,
+                email=user.email,
+                created_at=user.created_at,
+            ),
+            access_token=access_token,
+            refresh_token=refresh_token,
         )
-    
-    # Create user
-    user = User(
-        username=user_data.username,
-        email=user_data.email,
-        password_hash=get_password_hash(user_data.password),
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    
-    # Create tokens
-    access_token = create_access_token(data={"sub": str(user.id)})
-    refresh_token = create_refresh_token(data={"sub": str(user.id)})
-    
-    return AuthResponse(
-        user=UserResponse(
-            id=str(user.id),
-            username=user.username,
-            email=user.email,
-            created_at=user.created_at,
-        ),
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Registration error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}",
+        )
 
 
 @router.post("/login", response_model=AuthResponse)
