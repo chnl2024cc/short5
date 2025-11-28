@@ -5,6 +5,9 @@
 </template>
 
 <script setup lang="ts">
-// Main feed page
+// Main feed page - requires authentication
+definePageMeta({
+  middleware: 'auth',
+})
 </script>
 

@@ -5,6 +5,12 @@
 </template>
 
 <script setup lang="ts">
-// Root app component
+import { useAuthStore } from '~/stores/auth'
+
+// Initialize auth store from localStorage on app load
+if (process.client) {
+  const authStore = useAuthStore()
+  authStore.initFromStorage()
+}
 </script>
 
