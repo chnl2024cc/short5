@@ -52,6 +52,9 @@ async def register(
                 detail="Email already exists",
             )
         
+        # Password validation is handled by the schema (min_length=8)
+        # bcrypt_sha256 can handle passwords of any length, so no byte limit check needed
+        
         # Create user
         user = User(
             username=user_data.username,

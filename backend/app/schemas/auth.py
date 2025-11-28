@@ -12,16 +12,9 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, max_length=100)  # Allow up to 100 chars, validate bytes separately
-    
-    @field_validator('password')
-    @classmethod
-    def validate_password_length(cls, v: str) -> str:
-        """Validate password doesn't exceed bcrypt's 72-byte limit"""
-        password_bytes = v.encode('utf-8')
-        if len(password_bytes) > 72:
-            raise ValueError('Password cannot exceed 72 bytes when encoded. Please use a shorter password.')
-        return v
+    # Using bcrypt_sha256 allows passwords of any length (no 72-byte limit)
+    # Still enforce reasonable min/max for security and UX
+    password: str = Field(..., min_length=8, max_length=200)
 
 
 class UserResponse(UserBase):

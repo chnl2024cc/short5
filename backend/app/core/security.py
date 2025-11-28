@@ -4,40 +4,44 @@ Security utilities: JWT, password hashing
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+from passlib.hash import bcrypt_sha256
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use bcrypt_sha256 directly (not through CryptContext) to ensure it's used
+# bcrypt_sha256 pre-hashes with SHA-256 before bcrypt, allowing unlimited password length
+# This is the recommended approach per passlib documentation
+
+# Pre-initialize backend with a short password to avoid detection phase errors
+# bcrypt 5.0.0+ raises errors for passwords > 72 bytes during backend detection
+# Using a short password here triggers initialization without hitting the limit
+try:
+    _ = bcrypt_sha256.hash("init")
+except Exception:
+    # If initialization fails, continue - will be handled on first real use
+    pass
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against a hash"""
+    """Verify a password against a hash using bcrypt_sha256"""
     # Ensure password is a string
     if isinstance(plain_password, bytes):
         plain_password = plain_password.decode('utf-8')
     
-    # Handle bcrypt's 72-byte limit for verification
-    password_bytes = plain_password.encode('utf-8')
-    if len(password_bytes) > 72:
-        plain_password = password_bytes[:72].decode('utf-8', errors='ignore')
-    
-    return pwd_context.verify(plain_password, hashed_password)
+    # Use bcrypt_sha256 directly - handles passwords of any length
+    return bcrypt_sha256.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    """Hash a password"""
-    # Ensure password is a string and handle bcrypt's 72-byte limit
+    """Hash a password using bcrypt_sha256 (handles passwords of any length)"""
+    # Ensure password is a string
     if isinstance(password, bytes):
         password = password.decode('utf-8')
     
-    # Bcrypt has a 72-byte limit, but we validate length in schema
-    # Truncate to 72 bytes if somehow longer (shouldn't happen with validation)
-    password_bytes = password.encode('utf-8')
-    if len(password_bytes) > 72:
-        password = password_bytes[:72].decode('utf-8', errors='ignore')
-    
-    return pwd_context.hash(password)
+    # Use bcrypt_sha256 directly - it pre-hashes with SHA-256 before bcrypt
+    # This allows passwords of any length without the 72-byte limit
+    # This is the recommended approach per passlib documentation
+    return bcrypt_sha256.hash(password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
