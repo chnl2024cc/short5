@@ -2,6 +2,7 @@
  * Videos Store (Pinia)
  */
 import { defineStore } from 'pinia'
+import { useApi } from '~/composables/useApi'
 
 export const useVideosStore = defineStore('videos', {
   state: () => ({
@@ -13,19 +14,78 @@ export const useVideosStore = defineStore('videos', {
 
   actions: {
     async fetchFeed(cursor?: string) {
-      // TODO: Implement feed fetching with cursor pagination
+      const api = useApi()
+      try {
+        const response = await api.get<{
+          videos: any[]
+          next_cursor: string | null
+          has_more: boolean
+        }>(`/feed${cursor ? `?cursor=${cursor}` : ''}`)
+        
+        this.currentCursor = response.next_cursor
+        this.hasMore = response.has_more
+        
+        if (cursor) {
+          this.feed.push(...response.videos)
+        } else {
+          this.feed = response.videos
+        }
+        
+        return response
+      } catch (error) {
+        console.error('Failed to fetch feed:', error)
+        throw error
+      }
     },
 
     async voteOnVideo(videoId: string, direction: 'like' | 'not_like') {
-      // TODO: Implement vote/swipe API call
+      const api = useApi()
+      try {
+        await api.post(`/videos/${videoId}/vote`, {
+          direction,
+        })
+      } catch (error) {
+        console.error('Failed to vote on video:', error)
+        throw error
+      }
     },
 
     async uploadVideo(file: File, title?: string, description?: string) {
-      // TODO: Implement video upload
+      const api = useApi()
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        if (title) formData.append('title', title)
+        if (description) formData.append('description', description)
+        
+        const response = await api.post('/videos/upload', formData)
+        return response
+      } catch (error) {
+        console.error('Failed to upload video:', error)
+        throw error
+      }
     },
 
-    async fetchLikedVideos() {
-      // TODO: Implement liked videos fetching
+    async fetchLikedVideos(cursor?: string) {
+      const api = useApi()
+      try {
+        const response = await api.get<{
+          videos: any[]
+          next_cursor: string | null
+          has_more: boolean
+        }>(`/users/me/liked${cursor ? `?cursor=${cursor}` : ''}`)
+        
+        if (cursor) {
+          this.likedVideos.push(...response.videos)
+        } else {
+          this.likedVideos = response.videos
+        }
+        
+        return response
+      } catch (error) {
+        console.error('Failed to fetch liked videos:', error)
+        throw error
+      }
     },
   },
 })

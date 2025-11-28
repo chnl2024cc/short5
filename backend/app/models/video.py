@@ -1,7 +1,8 @@
 """
 Video Model
 """
-from sqlalchemy import Column, String, Text, Integer, BigInteger, ForeignKey, DateTime, func, Enum
+from sqlalchemy import Column, String, Text, Integer, BigInteger, ForeignKey, DateTime, func
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -25,7 +26,7 @@ class Video(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(255))
     description = Column(Text)
-    status = Column(Enum(VideoStatus), default=VideoStatus.UPLOADING, index=True)
+    status = Column(SQLEnum(VideoStatus, native_enum=False), default=VideoStatus.UPLOADING, index=True)
     url_hls = Column(Text)
     url_mp4 = Column(Text)
     thumbnail = Column(Text)

@@ -7,13 +7,13 @@ from typing import List
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "postgresql://short5_user:short5_password@localhost:5432/short5_db"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     
     # JWT
-    JWT_SECRET_KEY: str
+    JWT_SECRET_KEY: str = "change-me-in-production-use-strong-random-key"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -41,7 +41,9 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields from environment
 
 
 settings = Settings()

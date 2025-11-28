@@ -5,12 +5,18 @@ export default defineNuxtConfig({
   
   modules: [
     '@nuxt/ui',
-    '@nuxtjs/tailwindcss',
     '@pinia/nuxt',
     '@vueuse/nuxt',
   ],
 
   css: ['~/assets/css/main.css'],
+
+  postcss: {
+    plugins: {
+      '@tailwindcss/postcss': {},
+      autoprefixer: {},
+    },
+  },
 
   runtimeConfig: {
     public: {
@@ -30,11 +36,6 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
       ],
     },
-  },
-
-  // PWA Configuration (to be configured with @vite-pwa/nuxt)
-  pwa: {
-    // Will be configured later
   },
 
   typescript: {
