@@ -2,7 +2,8 @@
 Application Configuration
 """
 from pydantic_settings import BaseSettings
-from typing import List
+from pydantic import field_validator
+from typing import List, Union
 
 
 class Settings(BaseSettings):
@@ -26,7 +27,15 @@ class Settings(BaseSettings):
     S3_ENDPOINT_URL: str = ""  # For Cloudflare R2
     
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080"]
+    CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000,http://localhost:8080"
+    
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        """Parse CORS origins from string or list"""
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v if isinstance(v, list) else ["http://localhost:3000", "http://localhost:8080"]
     
     # File Upload
     MAX_UPLOAD_SIZE: int = 500 * 1024 * 1024  # 500MB
