@@ -22,8 +22,12 @@ celery_app.conf.update(
     # Route process_video tasks to default celery queue (video_worker listens to this)
     task_routes={
         "process_video": {"queue": "celery"},
+        # Also handle fully qualified task names from other apps
+        "worker.process_video": {"queue": "celery"},
     },
     # Allow sending tasks that aren't defined in this app (video_worker defines them)
     task_ignore_result=True,  # We don't need results for video processing
+    # Ensure tasks can be sent to other apps
+    task_always_eager=False,
 )
 

@@ -36,6 +36,16 @@ celery_app.conf.update(
     # Accept tasks from any Celery app (since backend uses different app name)
     task_accept_content=["json"],
     worker_prefetch_multiplier=1,  # Process one task at a time for video processing
+    # Allow receiving tasks from other Celery apps (backend uses "short_video_platform")
+    task_ignore_result=True,
+    # Ensure we can receive tasks sent via send_task from other apps
+    imports=("worker",),  # Explicitly import this module to register tasks
+    # Accept tasks with or without app prefix
+    task_routes={
+        "process_video": {"queue": "celery"},
+        "worker.process_video": {"queue": "celery"},
+        "short_video_platform.process_video": {"queue": "celery"},  # Accept from backend app
+    },
 )
 
 # Explicitly register the task (no autodiscover needed for single file)
@@ -415,12 +425,44 @@ def process_video(self, video_id: str, file_path: str):
     """
     Main video processing task with comprehensive error handling
     
+    This task can be called from other Celery apps using:
+    - send_task("process_video", ...) - simple name
+    - send_task("worker.process_video", ...) - fully qualified name
+    - send_task("short_video_platform.process_video", ...) - from backend app
+    
     Args:
         video_id: UUID of the video record
         file_path: Path to the uploaded video file
     """
+    # IMPORTANT: Print immediately to verify task is being called
+    # Use both stdout and stderr, and flush immediately
+    import sys
+    try:
+        print("="*60)
+        print(f"TASK RECEIVED: process_video")
+        print(f"Video ID: {video_id}")
+        print(f"File path: {file_path}")
+        print("="*60)
+        sys.stdout.flush()
+        
+        print("="*60, file=sys.stderr)
+        print(f"TASK RECEIVED: process_video", file=sys.stderr)
+        print(f"Video ID: {video_id}", file=sys.stderr)
+        print(f"File path: {file_path}", file=sys.stderr)
+        print("="*60, file=sys.stderr)
+        sys.stderr.flush()
+    except Exception as e:
+        print(f"ERROR in initial logging: {e}", file=sys.stderr)
+        sys.stderr.flush()
+    
     # Ensure file_path is absolute
-    input_path = Path(file_path)
+    try:
+        input_path = Path(file_path)
+    except Exception as e:
+        error_msg = f"Failed to create Path object: {e}"
+        print(f"ERROR: {error_msg}", file=sys.stderr)
+        sys.stderr.flush()
+        raise
     if not input_path.is_absolute():
         # If relative, assume it's relative to /app/uploads
         input_path = Path("/app/uploads") / input_path
@@ -433,11 +475,15 @@ def process_video(self, video_id: str, file_path: str):
         print(f"\n{'='*60}")
         print(f"📹 Starting video processing for {video_id}")
         print(f"{'='*60}")
+        print(f"   Task received: process_video")
+        print(f"   Video ID: {video_id}")
         print(f"   File path: {file_path}")
         print(f"   Absolute path: {input_path}")
         print(f"   File exists: {input_path.exists()}")
         if input_path.exists():
             print(f"   File size: {input_path.stat().st_size / 1024 / 1024:.2f} MB")
+        else:
+            print(f"   ⚠ WARNING: File does not exist at {input_path}")
         
         # Update status to processing (in case it wasn't already)
         update_video_status(video_id, "processing", error_reason=None)
@@ -583,15 +629,33 @@ def process_video(self, video_id: str, file_path: str):
 # When running: celery -A worker worker
 # Celery will import this module and use celery_app
 
-# Print startup information
-if __name__ != "__main__":
-    print("\n" + "="*60)
-    print("VIDEO WORKER STARTUP")
-    print("="*60)
-    print(f"Celery app name: {celery_app.main}")
-    print(f"Broker URL: {celery_app.conf.broker_url}")
-    print(f"Result backend: {celery_app.conf.result_backend}")
-    print(f"Task name: process_video")
-    print(f"Listening to queue: celery (default)")
-    print("="*60 + "\n")
+# Print startup information when module is imported
+# This will run when Celery worker starts and imports this module
+print("\n" + "="*60)
+print("VIDEO WORKER MODULE LOADED")
+print("="*60)
+print(f"Celery app name: {celery_app.main}")
+print(f"Broker URL: {celery_app.conf.broker_url}")
+print(f"Result backend: {celery_app.conf.result_backend}")
+
+# Force task registration by accessing it
+# This ensures the task decorator has run
+try:
+    _ = process_video
+    print(f"✓ Task function 'process_video' is defined")
+except NameError:
+    print(f"✗ ERROR: Task function 'process_video' not found!")
+
+# List registered tasks (may be empty until worker fully starts)
+try:
+    registered_tasks = [name for name in celery_app.tasks.keys() if 'process_video' in name]
+    if registered_tasks:
+        print(f"✓ Registered tasks containing 'process_video': {registered_tasks}")
+    else:
+        print(f"⚠ No 'process_video' tasks registered yet (will register when worker starts)")
+except Exception as e:
+    print(f"⚠ Could not list tasks: {e}")
+
+print(f"Queue configuration: {celery_app.conf.task_routes}")
+print("="*60 + "\n")
 

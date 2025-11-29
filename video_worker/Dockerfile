@@ -25,6 +25,7 @@ COPY . .
 # RUN useradd -m -u 1000 celery && chown -R celery:celery /app
 # USER celery
 
-# Default command
-CMD ["python", "worker.py"]
+# Default command - run Celery worker
+# This can be overridden in docker-compose.yml
+CMD ["celery", "-A", "worker", "worker", "--loglevel=info", "--concurrency=2", "-Q", "celery"]
 

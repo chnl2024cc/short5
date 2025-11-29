@@ -87,12 +87,57 @@ async def upload_video(
     await db.commit()
     
     # Trigger video processing task
-    # Use apply_async to ensure task is sent to the correct queue
-    celery_app.send_task(
-        "process_video",
-        args=[str(video.id), str(file_path)],
-        queue="celery",  # Explicitly specify queue
-    )
+    # Use send_task to send to video_worker (different Celery app)
+    # The task is registered in video_worker as "process_video"
+    try:
+        # Pre-task logging: log key state before attempting to send
+        logger.info(
+            f"[VIDEO_TASK] Preparing to send task for video {video.id}: "
+            f"file_path={file_path}, file_size={file_size} bytes, "
+            f"file_exists={file_path.exists()}, celery_app={type(celery_app).__name__}"
+        )
+        
+        # Try both task name formats to ensure compatibility
+        task_name = "process_video"
+        
+        # Check Celery app state before sending
+        if not hasattr(celery_app, 'send_task'):
+            raise AttributeError(f"Celery app missing send_task method: {type(celery_app)}")
+        
+        result = celery_app.send_task(
+            task_name,
+            args=[str(video.id), str(file_path)],
+            queue="celery",  # Explicitly specify queue
+            # Don't require result - task runs asynchronously
+            ignore_result=True,
+        )
+        
+        # Post-task logging: verify result and log success details
+        if not result or not hasattr(result, 'id'):
+            logger.error(
+                f"[VIDEO_TASK] Task sent but invalid result for video {video.id}: "
+                f"result_type={type(result)}, result={result}"
+            )
+        else:
+            logger.info(
+                f"[VIDEO_TASK] Task successfully queued for video {video.id}: "
+                f"task_id={result.id}, task_name={task_name}, queue=celery, "
+                f"file_path={file_path}, result_state={getattr(result, 'state', 'unknown')}"
+            )
+    except AttributeError as e:
+        logger.error(
+            f"[VIDEO_TASK] Celery app configuration error for video {video.id}: {e}",
+            exc_info=True
+        )
+    except Exception as e:
+        logger.error(
+            f"[VIDEO_TASK] Failed to send video processing task for video {video.id}: "
+            f"error_type={type(e).__name__}, error={e}, "
+            f"file_path={file_path}, file_exists={file_path.exists() if file_path else False}",
+            exc_info=True
+        )
+        # Don't fail the upload, but log the error
+        # The video will remain in PROCESSING status and can be retried
     
     return {
         "video_id": str(video.id),
