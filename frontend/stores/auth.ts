@@ -36,6 +36,11 @@ export const useAuthStore = defineStore('auth', {
           localStorage.setItem('user', JSON.stringify(response.user))
         }
         
+        // Sync pending votes after login
+        const { useVideosStore } = await import('./videos')
+        const videosStore = useVideosStore()
+        await videosStore.syncPendingVotes()
+        
         return response
       } catch (error) {
         console.error('Login failed:', error)
@@ -62,6 +67,11 @@ export const useAuthStore = defineStore('auth', {
           localStorage.setItem('refreshToken', response.refresh_token)
           localStorage.setItem('user', JSON.stringify(response.user))
         }
+        
+        // Sync pending votes after registration
+        const { useVideosStore } = await import('./videos')
+        const videosStore = useVideosStore()
+        await videosStore.syncPendingVotes()
         
         return response
       } catch (error) {

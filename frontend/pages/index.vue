@@ -6,6 +6,7 @@
         <h1 class="text-xl font-bold text-white">Short-Video</h1>
         <div class="flex items-center gap-4">
           <NuxtLink
+            v-if="authStore.isAuthenticated"
             to="/liked"
             class="text-white hover:text-blue-400 transition-colors"
             title="Liked Videos"
@@ -19,6 +20,7 @@
             </svg>
           </NuxtLink>
           <NuxtLink
+            v-if="authStore.isAuthenticated"
             to="/profile"
             class="text-white hover:text-blue-400 transition-colors"
             title="Profile"
@@ -36,6 +38,14 @@
                 d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
               />
             </svg>
+          </NuxtLink>
+          <NuxtLink
+            v-if="!authStore.isAuthenticated"
+            to="/login"
+            class="text-white hover:text-blue-400 transition-colors text-sm font-medium"
+            title="Login"
+          >
+            Login
           </NuxtLink>
           <NuxtLink
             v-if="authStore.user?.is_admin"
@@ -63,8 +73,9 @@
 
     <VideoFeed />
     
-    <!-- Floating Upload Button -->
+    <!-- Floating Upload Button (only for authenticated users) -->
     <NuxtLink
+      v-if="authStore.isAuthenticated"
       to="/upload"
       class="fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all hover:scale-110"
       title="Upload Video"
@@ -89,9 +100,9 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
 
-// Main feed page - requires authentication
+// Main feed page - accessible to everyone (anonymous users can view)
 definePageMeta({
-  middleware: 'auth',
+  // No auth middleware - allow anonymous access
 })
 
 const authStore = useAuthStore()

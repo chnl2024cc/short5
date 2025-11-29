@@ -24,12 +24,13 @@ Technischer Stack:
 
 ## 2. User Stories
 
-1. **Als Nutzer** möchte ich mich registrieren und einloggen, um Videos hochladen und ansehen zu können.
-2. **Als Nutzer** möchte ich Videos durch vertikales Scrollen ansehen.
-3. **Als Nutzer** möchte ich Videos nach rechts swipen → Like, nach links swipen → Nicht-Like.
-4. **Als Nutzer** möchte ich ein kurzes Profil haben, meine hochgeladenen Videos und Likes/Nicht-Likes einsehen.
-5. **Als Admin** möchte ich Uploads moderieren und Reports verwalten.
-6. **Als System** soll das Feed-Algorithmus Likes bevorzugen und Nicht-Likes entwerten.
+1. **Als Nutzer** möchte ich Videos ansehen können, ohne mich registrieren zu müssen (maximale Zugänglichkeit für geteilte Links).
+2. **Als Nutzer** möchte ich Videos nach rechts swipen → Like, nach links swipen → Nicht-Like, auch ohne Account (Votes werden lokal gespeichert).
+3. **Als Nutzer** möchte ich mich registrieren und einloggen, um Videos hochladen zu können und meine gespeicherten Votes zu synchronisieren.
+4. **Als Nutzer** möchte ich Videos durch vertikales Scrollen ansehen.
+5. **Als Nutzer** möchte ich ein kurzes Profil haben, meine hochgeladenen Videos und Likes/Nicht-Likes einsehen.
+6. **Als Admin** möchte ich Uploads moderieren und Reports verwalten.
+7. **Als System** soll das Feed-Algorithmus Likes bevorzugen und Nicht-Likes entwerten.
 
 ---
 
@@ -37,10 +38,13 @@ Technischer Stack:
 
 | Feature                  | Beschreibung                                                                   | Priorität |
 | ------------------------ | ------------------------------------------------------------------------------ | --------- |
+| Anonymous Access         | Feed ohne Login zugänglich, maximale Reichweite für geteilte Links            | Hoch      |
+| Anonymous Voting         | Votes ohne Account möglich, lokal in localStorage gespeichert                 | Hoch      |
+| Vote Synchronization     | Automatische Sync von lokalen Votes nach Login/Registrierung                  | Hoch      |
 | Auth & User Management   | Registrierung, Login, JWT Token, Passwort-Reset                                | Hoch      |
 | Upload                   | Chunked Upload, Video-Metadaten speichern, Status (processing/ready)           | Hoch      |
 | Video-Transcoding        | FFmpeg Worker erzeugt HLS + Thumbnail                                          | Hoch      |
-| Feed                     | Infinite Scroll, vertikales Swipe-Interface, Like/Nicht-Like                   | Hoch      |
+| Feed                     | Infinite Scroll, vertikales Swipe-Interface, Like/Nicht-Like (optional auth)   | Hoch      |
 | Swipe Mechanik           | Rechts = Like, Links = Nicht-Like                                              | Hoch      |
 | Recommendation Engine    | Likes erhöhen ähnliche Videos im Feed, Nicht-Likes reduzieren ähnliche Inhalte | Mittel    |
 | Admin / Moderation       | Video Reports, User Reports, Content-Moderation                                | Mittel    |
@@ -93,10 +97,11 @@ id | video_id | user_id | watched_seconds | created_at
 
 ## 6. MVP Scope
 
-* Vertikaler Swipe-Feed
-* Upload / Transcoding / Storage
-* User Auth
-* Like / Nicht-Like Mechanik
+* Vertikaler Swipe-Feed (ohne Login-Anforderung für maximale Zugänglichkeit)
+* Anonymous Voting: Votes werden lokal gespeichert und nach Login/Registrierung synchronisiert
+* Upload / Transcoding / Storage (erfordert Authentifizierung)
+* User Auth (optional für Feed, erforderlich für Upload)
+* Like / Nicht-Like Mechanik (funktioniert auch ohne Account)
 * Infinite Scroll Feed
 * Admin Dashboard minimal
 * DB + Worker + CDN

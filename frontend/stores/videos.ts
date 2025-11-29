@@ -3,6 +3,15 @@
  */
 import { defineStore } from 'pinia'
 import { useApi } from '~/composables/useApi'
+import { useAuthStore } from './auth'
+
+const PENDING_VOTES_KEY = 'pending_votes'
+
+interface PendingVote {
+  videoId: string
+  direction: 'like' | 'not_like'
+  timestamp: number
+}
 
 export const useVideosStore = defineStore('videos', {
   state: () => ({
@@ -39,14 +48,114 @@ export const useVideosStore = defineStore('videos', {
     },
 
     async voteOnVideo(videoId: string, direction: 'like' | 'not_like') {
-      const api = useApi()
+      const authStore = useAuthStore()
+      
+      // If user is authenticated, vote directly
+      if (authStore.isAuthenticated) {
+        const api = useApi()
+        try {
+          await api.post(`/videos/${videoId}/vote`, {
+            direction,
+          })
+          return
+        } catch (error) {
+          console.error('Failed to vote on video:', error)
+          throw error
+        }
+      }
+      
+      // If not authenticated, store vote in localStorage
+      if (process.client) {
+        const pendingVotes = this.getPendingVotes()
+        // Check if already voted on this video
+        const existingIndex = pendingVotes.findIndex(v => v.videoId === videoId)
+        if (existingIndex >= 0) {
+          // Update existing vote
+          pendingVotes[existingIndex] = {
+            videoId,
+            direction,
+            timestamp: Date.now(),
+          }
+        } else {
+          // Add new vote
+          pendingVotes.push({
+            videoId,
+            direction,
+            timestamp: Date.now(),
+          })
+        }
+        localStorage.setItem(PENDING_VOTES_KEY, JSON.stringify(pendingVotes))
+        console.log('Vote stored locally, will sync when logged in')
+      }
+    },
+
+    getPendingVotes(): PendingVote[] {
+      if (!process.client) return []
       try {
-        await api.post(`/videos/${videoId}/vote`, {
-          direction,
-        })
-      } catch (error) {
-        console.error('Failed to vote on video:', error)
-        throw error
+        const stored = localStorage.getItem(PENDING_VOTES_KEY)
+        return stored ? JSON.parse(stored) : []
+      } catch {
+        return []
+      }
+    },
+
+    clearPendingVotes() {
+      if (process.client) {
+        localStorage.removeItem(PENDING_VOTES_KEY)
+      }
+    },
+
+    async syncPendingVotes() {
+      const authStore = useAuthStore()
+      if (!authStore.isAuthenticated) {
+        return
+      }
+
+      const pendingVotes = this.getPendingVotes()
+      if (pendingVotes.length === 0) {
+        return
+      }
+
+      const api = useApi()
+      const synced: string[] = []
+      const failed: PendingVote[] = []
+
+      for (const vote of pendingVotes) {
+        try {
+          await api.post(`/videos/${vote.videoId}/vote`, {
+            direction: vote.direction,
+          })
+          synced.push(vote.videoId)
+        } catch (error: any) {
+          console.error(`Failed to sync vote for video ${vote.videoId}:`, error)
+          // If it's a conflict (already voted), that's fine - remove it
+          // Check if error message contains "already voted" or "409"
+          const errorMessage = error?.message || String(error) || ''
+          if (errorMessage.includes('already voted') || errorMessage.includes('409') || errorMessage.includes('conflict')) {
+            synced.push(vote.videoId)
+          } else {
+            failed.push(vote)
+          }
+        }
+      }
+
+      // Remove synced votes, keep failed ones for retry
+      if (synced.length > 0) {
+        const remaining = pendingVotes.filter(v => !synced.includes(v.videoId))
+        if (process.client) {
+          if (remaining.length > 0) {
+            localStorage.setItem(PENDING_VOTES_KEY, JSON.stringify(remaining))
+          } else {
+            localStorage.removeItem(PENDING_VOTES_KEY)
+          }
+        }
+      }
+
+      if (synced.length > 0) {
+        console.log(`Synced ${synced.length} pending vote(s)`)
+      }
+      if (failed.length > 0) {
+        console.warn(`${failed.length} vote(s) failed to sync, will retry later`)
       }
     },
 
