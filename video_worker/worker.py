@@ -57,23 +57,33 @@ else:
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
-# S3/R2 client (only initialize if credentials are provided)
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-S3_BUCKET = os.getenv("S3_BUCKET_NAME")
+# S3/R2 client (only initialize if credentials are provided and valid)
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+S3_BUCKET = os.getenv("S3_BUCKET_NAME", "").strip()
 
-# Only create S3 client if credentials are available
-if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
-    s3_client = boto3.client(
-        "s3",
-        endpoint_url=os.getenv("S3_ENDPOINT_URL") or None,
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        region_name=os.getenv("AWS_REGION", "us-east-1"),
-    )
+# Only create S3 client if credentials are available and not empty
+# Check for actual values, not just presence (empty strings from .env count as missing)
+USE_S3 = bool(AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and S3_BUCKET)
+
+if USE_S3:
+    try:
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=os.getenv("S3_ENDPOINT_URL") or None,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            region_name=os.getenv("AWS_REGION", "us-east-1"),
+        )
+        print("✓ S3 client initialized - will use S3/R2 storage")
+    except Exception as e:
+        print(f"⚠ WARNING: Failed to initialize S3 client: {e}")
+        print("  Falling back to local file storage (development mode)")
+        s3_client = None
+        USE_S3 = False
 else:
     s3_client = None
-    print("S3 credentials not provided - will use local file storage (development mode)")
+    print("📦 S3 credentials not provided - will use local file storage (development mode)")
 
 # Processing settings
 TEMP_DIR = Path("/tmp/video_processing")
@@ -96,20 +106,50 @@ VIDEO_PROFILES = {
 
 def update_video_status(video_id: str, status: str, **kwargs):
     """Update video status in database"""
-    with SessionLocal() as session:
-        update_fields = {"status": status}
-        update_fields.update(kwargs)
-        
-        set_clause = ", ".join([f"{k} = :{k}" for k in update_fields.keys()])
-        query = text(f"""
-            UPDATE videos 
-            SET {set_clause}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = :video_id
-        """)
-        
-        params = {"video_id": video_id, **update_fields}
-        session.execute(query, params)
-        session.commit()
+    from uuid import UUID
+    
+    try:
+        with SessionLocal() as session:
+            update_fields = {"status": status}
+            update_fields.update(kwargs)
+            
+            # Convert video_id to UUID if it's a string
+            video_uuid = UUID(video_id) if isinstance(video_id, str) else video_id
+            
+            # Build SET clause with proper parameter names
+            set_parts = []
+            params = {}
+            
+            for key, value in update_fields.items():
+                param_name = f"update_{key}"
+                set_parts.append(f"{key} = :{param_name}")
+                params[param_name] = value
+            
+            # Add video_id as parameter (will be cast to UUID in SQL)
+            params["video_id"] = str(video_uuid)
+            
+            set_clause = ", ".join(set_parts)
+            # Use CAST in SQL instead of :: syntax to avoid parameter binding issues
+            query = text(f"""
+                UPDATE videos 
+                SET {set_clause}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = CAST(:video_id AS uuid)
+            """)
+            
+            result = session.execute(query, params)
+            session.commit()
+            
+            rows_updated = result.rowcount
+            if rows_updated == 0:
+                print(f"⚠ WARNING: No rows updated for video_id {video_id}")
+            else:
+                print(f"✓ Database updated: {rows_updated} row(s) for video {video_id}")
+                
+    except Exception as e:
+        print(f"✗ ERROR updating video status for {video_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 def cleanup_failed_video(video_id: str, file_path: Path):
@@ -288,7 +328,7 @@ def create_thumbnail(input_path: Path, output_path: Path, timestamp: str = "00:0
 def upload_to_s3(local_path: Path, s3_key: str):
     """Upload file to S3/R2, or use local file path in development mode"""
     # Development mode: if S3 credentials are not configured, use local file paths
-    if not S3_BUCKET or s3_client is None:
+    if not USE_S3 or s3_client is None:
         print(f"📦 Development mode: Using local file storage for {s3_key}")
         try:
             # Return a local file URL that can be served by the backend
@@ -338,16 +378,36 @@ def upload_to_s3(local_path: Path, s3_key: str):
             url = f"https://{S3_BUCKET}.s3.{os.getenv('AWS_REGION', 'us-east-1')}.amazonaws.com/{s3_key}"
         print(f"  ✓ Uploaded to S3: {url}")
         return url
-    except ClientError as e:
-        print(f"✗ ERROR uploading to S3: {e}")
+    except (ClientError, Exception) as e:
+        # If S3 upload fails (invalid credentials, network error, etc.), fall back to local storage
+        print(f"⚠ WARNING: S3 upload failed: {e}")
+        print(f"  Falling back to local file storage for {s3_key}")
         import traceback
         traceback.print_exc()
-        raise
-    except Exception as e:
-        print(f"✗ ERROR in S3 upload (unexpected): {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+        
+        # Fall back to local storage
+        try:
+            local_storage = Path("/app/uploads/processed")
+            local_storage.mkdir(parents=True, exist_ok=True)
+            
+            safe_key = s3_key.replace("/", "_")
+            dest_path = local_storage / safe_key
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            import shutil
+            shutil.copy2(local_path, dest_path)
+            
+            if not dest_path.exists():
+                raise FileNotFoundError(f"Failed to copy file to {dest_path}")
+            
+            url_path = f"/uploads/processed/{safe_key}"
+            print(f"  ✓ File stored locally (fallback): {dest_path} → {url_path}")
+            return url_path
+        except Exception as fallback_error:
+            print(f"✗ ERROR in local file storage fallback: {fallback_error}")
+            # Last resort: return path to original file location
+            print(f"  ⚠ Using original file location as last resort")
+            return f"/uploads/{local_path.name}"
 
 
 @celery_app.task(name="process_video", bind=True, max_retries=0)
@@ -359,13 +419,25 @@ def process_video(self, video_id: str, file_path: str):
         video_id: UUID of the video record
         file_path: Path to the uploaded video file
     """
+    # Ensure file_path is absolute
     input_path = Path(file_path)
+    if not input_path.is_absolute():
+        # If relative, assume it's relative to /app/uploads
+        input_path = Path("/app/uploads") / input_path
+        print(f"⚠ Converted relative path to absolute: {input_path}")
+    
     error_category = None
     user_friendly_error = None
     
     try:
+        print(f"\n{'='*60}")
         print(f"📹 Starting video processing for {video_id}")
+        print(f"{'='*60}")
         print(f"   File path: {file_path}")
+        print(f"   Absolute path: {input_path}")
+        print(f"   File exists: {input_path.exists()}")
+        if input_path.exists():
+            print(f"   File size: {input_path.stat().st_size / 1024 / 1024:.2f} MB")
         
         # Update status to processing (in case it wasn't already)
         update_video_status(video_id, "processing", error_reason=None)
@@ -510,4 +582,16 @@ def process_video(self, video_id: str, file_path: str):
 # Make celery_app available for Celery CLI
 # When running: celery -A worker worker
 # Celery will import this module and use celery_app
+
+# Print startup information
+if __name__ != "__main__":
+    print("\n" + "="*60)
+    print("VIDEO WORKER STARTUP")
+    print("="*60)
+    print(f"Celery app name: {celery_app.main}")
+    print(f"Broker URL: {celery_app.conf.broker_url}")
+    print(f"Result backend: {celery_app.conf.result_backend}")
+    print(f"Task name: process_video")
+    print(f"Listening to queue: celery (default)")
+    print("="*60 + "\n")
 

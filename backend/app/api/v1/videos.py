@@ -32,9 +32,9 @@ from app.services.video_deletion import video_deletion_service
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Upload directory
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Upload directory - use absolute path for container compatibility
+UPLOAD_DIR = Path("/app/uploads")
+UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
 
 
 @router.post("/upload", status_code=status.HTTP_202_ACCEPTED)

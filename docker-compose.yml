@@ -54,7 +54,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-short5-videos}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     ports:
@@ -83,7 +83,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-short5-videos}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     volumes:
@@ -102,6 +102,7 @@ services:
     build:
       context: ./video_worker
       dockerfile: Dockerfile
+      #no_cache: true
     container_name: short5_video_worker
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-short5_user}:${POSTGRES_PASSWORD:-short5_password}@postgres:5432/${POSTGRES_DB:-short5_db}
@@ -109,7 +110,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-short5-videos}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       C_FORCE_ROOT: "true"  # Allow running as root in container (development)
@@ -121,7 +122,7 @@ services:
       - redis
     networks:
       - short5_network
-    command: celery -A worker worker --loglevel=info --concurrency=2
+    command: celery -A worker worker --loglevel=info --concurrency=2 -Q celery
 
   # Nuxt Frontend (Development)
   frontend:
