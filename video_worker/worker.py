@@ -135,7 +135,25 @@ def create_thumbnail(input_path: Path, output_path: Path, timestamp: str = "00:0
 
 
 def upload_to_s3(local_path: Path, s3_key: str):
-    """Upload file to S3/R2"""
+    """Upload file to S3/R2, or use local file path in development mode"""
+    # Development mode: if S3 credentials are not configured, use local file paths
+    if not S3_BUCKET or not os.getenv("AWS_ACCESS_KEY_ID"):
+        print(f"Development mode: Using local file path for {s3_key}")
+        # Return a local file URL that can be served by the backend
+        # Store files in a local directory that the backend can serve
+        local_storage = Path("/app/uploads/processed")
+        local_storage.mkdir(parents=True, exist_ok=True)
+        
+        # Copy file to processed directory
+        dest_path = local_storage / s3_key.replace("/", "_")
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copy2(local_path, dest_path)
+        
+        # Return a path that backend can serve
+        return f"/uploads/processed/{s3_key.replace('/', '_')}"
+    
+    # Production mode: upload to S3/R2
     try:
         s3_client.upload_file(
             str(local_path),
@@ -143,6 +161,9 @@ def upload_to_s3(local_path: Path, s3_key: str):
             s3_key,
             ExtraArgs={"ContentType": "application/octet-stream"},
         )
+        # Use endpoint URL if provided (for Cloudflare R2)
+        if os.getenv("S3_ENDPOINT_URL"):
+            return f"{os.getenv('S3_ENDPOINT_URL')}/{S3_BUCKET}/{s3_key}"
         return f"https://{S3_BUCKET}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{s3_key}"
     except ClientError as e:
         print(f"Error uploading to S3: {e}")
