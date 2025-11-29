@@ -101,13 +101,38 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def startup_event():
     """Initialize database tables on startup"""
     try:
-        from app.core.database import engine, Base
+        from app.core.database import engine, Base, AsyncSessionLocal
         from app.models import user, video, vote, view, user_liked_video
+        from sqlalchemy import text
         
         # Create all tables
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables initialized successfully")
+        
+        # Ensure error_reason column exists (migration)
+        try:
+            async with AsyncSessionLocal() as db:
+                # Check if column exists
+                result = await db.execute(text("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'videos' 
+                        AND column_name = 'error_reason'
+                    )
+                """))
+                if not result.scalar():
+                    logger.info("Adding error_reason column to videos table...")
+                    await db.execute(text("ALTER TABLE videos ADD COLUMN error_reason TEXT;"))
+                    await db.commit()
+                    logger.info("✓ error_reason column added successfully")
+                else:
+                    logger.info("✓ error_reason column already exists")
+        except Exception as e:
+            logger.warning(f"Could not verify/add error_reason column: {e}")
+            # Don't fail startup if migration fails
+            
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}", exc_info=True)
         # Don't raise - allow app to start even if tables exist

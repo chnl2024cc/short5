@@ -141,6 +141,7 @@ async def get_video(
         url_hls=video.url_hls,
         url_mp4=video.url_mp4,
         duration_seconds=video.duration_seconds,
+        error_reason=video.error_reason,  # Include error reason if video failed
         user=UserBasic(id=str(user.id), username=user.username),
         stats=VideoStats(
             likes=likes_count.scalar() or 0,

@@ -11,6 +11,9 @@ engine = create_async_engine(
     settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
     echo=settings.ENVIRONMENT == "development",
     future=True,
+    pool_pre_ping=True,  # Verify connections before using them
+    pool_recycle=3600,  # Recycle connections after 1 hour
+    connect_args={"server_settings": {"application_name": "short5_backend"}},
 )
 
 # Create session factory

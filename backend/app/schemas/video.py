@@ -48,6 +48,7 @@ class VideoResponse(VideoBase):
     url_hls: Optional[str] = None
     url_mp4: Optional[str] = None
     duration_seconds: Optional[int] = None
+    error_reason: Optional[str] = None  # Error message if video failed
     user: UserBasic
     stats: VideoStats
     created_at: datetime
