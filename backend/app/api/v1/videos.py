@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, cast, String
 from typing import Optional
 import uuid
+import logging
 from pathlib import Path
 
 from app.core.database import get_db
@@ -26,7 +27,9 @@ from app.schemas.video import (
     ViewResponse,
 )
 from app.celery_app import celery_app
+from app.services.video_deletion import video_deletion_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Upload directory
@@ -215,7 +218,8 @@ async def delete_video(
     current_user: User = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete own video"""
+    """Delete own video (comprehensive deletion: DB, storage, cache)"""
+    # Check if video exists and user has permission
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
     
@@ -231,10 +235,38 @@ async def delete_video(
             detail="Not authorized to delete this video",
         )
     
-    await db.delete(video)
-    await db.commit()
+    # Use deletion service for comprehensive deletion
+    try:
+        deletion_result = await video_deletion_service.delete_video(str(video.id), db, video)
+        
+        if not deletion_result.get("database_deleted"):
+            error_details = deletion_result.get("errors", [])
+            error_message = ', '.join(error_details) if error_details else "Unknown error during deletion"
+            logger.error(f"Video deletion failed: {error_message}. Video ID: {video_id}")
+            # Raise HTTPException - this will trigger get_db to rollback
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete video: {error_message}",
+            )
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 404, 403 from above) - will trigger rollback
+        raise
+    except Exception as e:
+        # Catch any unexpected errors - will trigger rollback via get_db
+        logger.error(f"Unexpected error during video deletion for {video_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        )
     
-    return {"message": "Video deleted successfully"}
+    return {
+        "message": "Video deleted successfully",
+        "video_id": video_id,
+        "details": {
+            "storage_deleted": deletion_result.get("storage_deleted"),
+            "reports_handled": deletion_result.get("reports_handled"),
+        }
+    }
 
 
 @router.post("/{video_id}/view", response_model=ViewResponse)

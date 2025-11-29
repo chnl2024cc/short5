@@ -57,7 +57,7 @@ Ziel: **schnelles MVP**, skalierbar, modular erweiterbar, mit Tinder-artiger Swi
 |-------|---------|
 | Auth | JWT/OAuth, Registration, Login, Refresh Token, Vote-Synchronisation nach Login |
 | Users | Profile, Stats, Creator Management, Liked-/Saved-Liste |
-| Videos | Upload Handling, Status (processing/ready), Metadata |
+| Videos | Upload Handling, Status (processing/ready), Metadata, Deletion (with storage cleanup) |
 | Feed | Likes/Nicht-Likes, Cursor Pagination, Recommendation Logic (optional auth) |
 | Admin | Moderation, Reports, Content Review |
 
@@ -142,6 +142,67 @@ id | video_id | user_id | watched_seconds | created_at
 1. **Feed Access:** ✅ Implementiert - Feed ist ohne Login zugänglich für maximale Reichweite
 2. **Anonymous Voting:** ✅ Implementiert - Votes werden in localStorage gespeichert und nach Login/Registrierung synchronisiert
 3. **Vote Synchronization:** ✅ Implementiert - Automatische Sync nach erfolgreichem Login oder Registrierung
+
+---
+
+## 3.2. Video Deletion Feature
+
+### Overview
+Users should be able to delete their own videos from their profile view. When a video is deleted, all associated data must be removed comprehensively:
+
+1. **Database Records:**
+   - Video record (CASCADE deletes handle related records automatically):
+     - Votes (likes/not-likes) - CASCADE
+     - UserLikedVideos (saved list entries) - CASCADE
+     - Views - CASCADE
+   - Reports related to the video should be handled (mark as resolved or delete)
+
+2. **Storage Files:**
+   - **S3/R2 Storage (Production):**
+     - HLS master playlist: `videos/{video_id}/playlist.m3u8`
+     - HLS quality playlists: `videos/{video_id}/720p/{video_id}.m3u8`, `videos/{video_id}/480p/{video_id}.m3u8`
+     - HLS video segments: All `.ts` files in `videos/{video_id}/{quality}/` directories
+     - Thumbnail: `videos/{video_id}/thumbnail.jpg`
+     - MP4 file (if exists): Based on `url_mp4` field
+   - **Local Storage (Development):**
+     - Original uploaded file: `/app/uploads/{video_id}.{ext}`
+     - Processed files: All files in `/app/uploads/processed/` containing `{video_id}` in filename
+     - Temporary processing files: `/tmp/video_processing/{video_id}/` directory
+
+3. **Cache Invalidation:**
+   - Redis cache keys related to the video (if any)
+   - Feed cache entries containing the deleted video
+   - User profile cache (video count stats)
+
+4. **Background Jobs:**
+   - Cancel any pending/processing Celery tasks for the video
+   - Clean up any in-progress processing files
+
+### Implementation Approach
+
+**Backend:**
+- Create a comprehensive video deletion service that:
+  1. Extracts storage paths from video URLs
+  2. Deletes all files from S3/local storage
+  3. Invalidates relevant caches
+  4. Deletes database record (CASCADE handles related records)
+  5. Handles errors gracefully (continue deletion even if some files fail)
+
+**Frontend:**
+- Add delete button to video cards in profile view
+- Show confirmation dialog before deletion
+- Optimistic UI update (remove from list immediately)
+- Error handling with rollback on failure
+
+### API Endpoint
+- `DELETE /api/v1/videos/{video_id}` - Already exists, needs enhancement
+- Authorization: Only video owner or admin can delete
+- Returns: Success message or error details
+
+### Storage Cleanup Logic
+- Parse storage URLs to extract S3 keys or local file paths
+- Delete entire `videos/{video_id}/` prefix in S3 (or all matching files locally)
+- Handle both production (S3/R2) and development (local file system) modes
 
 ---
 

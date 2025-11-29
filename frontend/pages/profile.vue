@@ -195,9 +195,46 @@
             <div
               v-for="video in videos"
               :key="video.id"
-              class="bg-gray-900 rounded-lg overflow-hidden hover:bg-gray-800 transition-colors cursor-pointer"
+              class="bg-gray-900 rounded-lg overflow-hidden hover:bg-gray-800 transition-colors cursor-pointer relative group"
               @click="viewVideo(video)"
             >
+              <!-- Delete Button -->
+              <button
+                @click.stop="handleDeleteVideo(video)"
+                :disabled="isDeleting === video.id"
+                class="absolute top-2 right-2 z-10 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Delete video"
+              >
+                <svg
+                  v-if="isDeleting !== video.id"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+                <svg
+                  v-else
+                  class="w-4 h-4 animate-spin"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+              
               <!-- Thumbnail -->
               <div class="relative aspect-[9/16] bg-gray-800">
                 <img
@@ -343,6 +380,7 @@ const videosPending = ref(false)
 const videosError = ref<Error | null>(null)
 const videosCursor = ref<string | null>(null)
 const hasMoreVideos = ref(true)
+const isDeleting = ref<string | null>(null)
 
 const loadVideos = async (cursor?: string | null) => {
   if (videosPending.value || (!hasMoreVideos.value && cursor)) return
@@ -441,6 +479,39 @@ const loadMoreVideos = () => {
 const viewVideo = (video: any) => {
   // Navigate to feed or video detail page
   navigateTo('/')
+}
+
+const handleDeleteVideo = async (video: any) => {
+  // Confirmation dialog
+  if (!confirm(`Are you sure you want to delete "${video.title || 'this video'}"? This action cannot be undone.`)) {
+    return
+  }
+  
+  isDeleting.value = video.id
+  
+  try {
+    await api.delete(`/videos/${video.id}`)
+    
+    // Optimistic UI update: Remove from list
+    videos.value = videos.value.filter(v => v.id !== video.id)
+    
+    // Refresh profile stats
+    await refreshProfile()
+    
+    // You could use a toast notification here for success message
+  } catch (err: any) {
+    console.error('Failed to delete video:', err)
+    console.error('Error details:', {
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      data: err.response?.data,
+      message: err.message
+    })
+    const errorMessage = err.response?.data?.detail || err.message || 'Failed to delete video. Please try again.'
+    alert(errorMessage)
+  } finally {
+    isDeleting.value = null
+  }
 }
 
 const handleLogout = async () => {
