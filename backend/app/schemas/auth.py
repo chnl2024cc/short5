@@ -26,6 +26,23 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
+class UserStats(BaseModel):
+    videos_uploaded: int = 0
+    total_likes_received: int = 0
+    total_views: int = 0
+
+
+class UserProfileResponse(BaseModel):
+    id: str
+    username: str
+    email: str
+    created_at: Optional[str] = None
+    stats: UserStats
+
+    class Config:
+        from_attributes = True
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str

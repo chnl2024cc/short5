@@ -3,7 +3,7 @@ Feed Endpoint with Recommendation Algorithm
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, desc
+from sqlalchemy import select, func, and_, or_, desc, cast, String
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -35,7 +35,7 @@ async def calculate_video_score(
         # New user: use popularity only
         likes_count = await db.execute(
             select(func.count(Vote.id)).where(
-                Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
+                Vote.video_id == video.id, cast(Vote.direction, String) == "like"
             )
         )
         views_count = await db.execute(
@@ -63,7 +63,7 @@ async def calculate_video_score(
         liked_creators = await db.execute(
             select(Video.user_id)
             .join(Vote, Vote.video_id == Video.id)
-            .where(Vote.user_id == user_uuid, Vote.direction == VoteDirection.LIKE)
+            .where(Vote.user_id == user_uuid, cast(Vote.direction, String) == "like")
             .distinct()
         )
         liked_creator_ids = {row[0] for row in liked_creators.all()}  # Keep as UUID
@@ -72,7 +72,7 @@ async def calculate_video_score(
         not_liked_creators = await db.execute(
             select(Video.user_id)
             .join(Vote, Vote.video_id == Video.id)
-            .where(Vote.user_id == user_uuid, Vote.direction == VoteDirection.NOT_LIKE)
+            .where(Vote.user_id == user_uuid, cast(Vote.direction, String) == "not_like")
             .distinct()
         )
         not_liked_creator_ids = {row[0] for row in not_liked_creators.all()}  # Keep as UUID
@@ -88,7 +88,7 @@ async def calculate_video_score(
             .join(Video, Vote.video_id == Video.id)
             .where(
                 Vote.user_id == user_uuid,
-                Vote.direction == VoteDirection.LIKE,
+                cast(Vote.direction, String) == "like",
                 Video.user_id == video.user_id,
             )
         )
@@ -103,7 +103,7 @@ async def calculate_video_score(
     # Popularity score (30% weight)
     likes_count = await db.execute(
         select(func.count(Vote.id)).where(
-            Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
+            Vote.video_id == video.id, cast(Vote.direction, String) == "like"
         )
     )
     views_count = await db.execute(
@@ -200,7 +200,7 @@ async def get_feed(
                 # Get stats
                 likes_count = await db.execute(
                     select(func.count(Vote.id)).where(
-                        Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
+                        Vote.video_id == video.id, cast(Vote.direction, String) == "like"
                     )
                 )
                 views_count = await db.execute(

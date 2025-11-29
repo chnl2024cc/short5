@@ -1,59 +1,135 @@
 """
 User Endpoints
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, String
 from typing import Optional
+import logging
+from pydantic import ValidationError
 
 from app.core.database import get_db
 from app.api.v1.dependencies import get_current_user_required
 from app.models.user import User
 from app.models.video import Video
-from app.models.vote import Vote, VoteDirection
+from app.models.vote import Vote
 from app.models.view import View
 from app.schemas.video import VideoResponse, UserBasic, VideoStats
+from app.schemas.auth import UserProfileResponse, UserStats
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
-@router.get("/me")
+@router.get("/me", response_model=UserProfileResponse)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
-):
-    """Get current user profile"""
-    # Get user stats
-    videos_count = await db.execute(
-        select(func.count(Video.id)).where(Video.user_id == current_user.id)
-    )
-    videos_uploaded = videos_count.scalar() or 0
+) -> UserProfileResponse:
+    """
+    Get current user profile with statistics.
     
-    likes_received = await db.execute(
-        select(func.count(Vote.id))
-        .join(Video)
-        .where(Video.user_id == current_user.id, Vote.direction == VoteDirection.LIKE)
-    )
-    total_likes = likes_received.scalar() or 0
-    
-    views_count = await db.execute(
-        select(func.count(View.id))
-        .join(Video)
-        .where(Video.user_id == current_user.id)
-    )
-    total_views = views_count.scalar() or 0
-    
-    return {
-        "id": str(current_user.id),
-        "username": current_user.username,
-        "email": current_user.email,
-        "created_at": current_user.created_at,
-        "stats": {
-            "videos_uploaded": videos_uploaded,
-            "total_likes_received": total_likes,
-            "total_views": total_views,
-        },
-    }
+    Returns user information including:
+    - Basic user info (id, username, email, created_at)
+    - Statistics (videos uploaded, likes received, total views)
+    """
+    try:
+        # Get user stats - use separate queries for clarity
+        # Videos count
+        videos_result = await db.execute(
+            select(func.count(Video.id)).where(Video.user_id == current_user.id)
+        )
+        videos_uploaded = videos_result.scalar() or 0
+        
+        # Likes received on user's videos
+        # Cast direction to String to avoid enum type coercion issues
+        likes_result = await db.execute(
+            select(func.count(Vote.id))
+            .join(Video, Vote.video_id == Video.id)
+            .where(
+                Video.user_id == current_user.id,
+                cast(Vote.direction, String) == "like"
+            )
+        )
+        total_likes = likes_result.scalar() or 0
+        
+        # Views on user's videos
+        views_result = await db.execute(
+            select(func.count(View.id))
+            .join(Video, View.video_id == Video.id)
+            .where(Video.user_id == current_user.id)
+        )
+        total_views = views_result.scalar() or 0
+        
+        # Format created_at
+        created_at_str = None
+        if current_user.created_at:
+            if isinstance(current_user.created_at, str):
+                created_at_str = current_user.created_at
+            else:
+                created_at_str = current_user.created_at.isoformat()
+        
+        # Build response - ensure all required fields are present
+        # User model has NOT NULL constraints, but we'll be defensive
+        username = current_user.username if current_user.username else ""
+        email = current_user.email if current_user.email else ""
+        
+        # Create stats object
+        stats = UserStats(
+            videos_uploaded=int(videos_uploaded),
+            total_likes_received=int(total_likes),
+            total_views=int(total_views),
+        )
+        
+        # Create and validate response
+        try:
+            response = UserProfileResponse(
+                id=str(current_user.id),
+                username=username,
+                email=email,
+                created_at=created_at_str,
+                stats=stats,
+            )
+            return response
+        except ValidationError as ve:
+            logger.error(
+                f"Pydantic validation error for user {current_user.id}: {ve.errors()}",
+                exc_info=True
+            )
+            from app.core.config import settings
+            if settings.ENVIRONMENT == "development":
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Response validation error: {ve.errors()}"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch user profile"
+            )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        import traceback
+        error_details = str(e)
+        error_traceback = traceback.format_exc()
+        
+        logger.error(
+            f"Error fetching user profile for user {current_user.id}: {error_details}\n{error_traceback}",
+            exc_info=True
+        )
+        
+        # In development, include more details
+        from app.core.config import settings
+        if settings.ENVIRONMENT == "development":
+            detail = f"Failed to fetch user profile: {error_details}"
+        else:
+            detail = "Failed to fetch user profile"
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=detail
+        )
 
 
 @router.get("/{user_id}")
@@ -77,14 +153,14 @@ async def get_user_profile(
     
     likes_received = await db.execute(
         select(func.count(Vote.id))
-        .join(Video)
-        .where(Video.user_id == user.id, Vote.direction == "like")
+        .join(Video, Vote.video_id == Video.id)
+        .where(Video.user_id == user.id, cast(Vote.direction, String) == "like")
     )
     total_likes = likes_received.scalar() or 0
     
     views_count = await db.execute(
         select(func.count(View.id))
-        .join(Video)
+        .join(Video, View.video_id == Video.id)
         .where(Video.user_id == user.id)
     )
     total_views = views_count.scalar() or 0
@@ -140,7 +216,7 @@ async def get_liked_videos(
         # Get stats
         likes_count = await db.execute(
             select(func.count(Vote.id)).where(
-                Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
+                Vote.video_id == video.id, cast(Vote.direction, String) == "like"
             )
         )
         views_count = await db.execute(
@@ -210,7 +286,7 @@ async def get_my_videos(
         # Get stats
         likes_count = await db.execute(
             select(func.count(Vote.id)).where(
-                Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
+                Vote.video_id == video.id, cast(Vote.direction, String) == "like"
             )
         )
         views_count = await db.execute(

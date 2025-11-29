@@ -3,7 +3,7 @@ Video Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, String
 from typing import Optional
 import uuid
 from pathlib import Path
@@ -118,12 +118,12 @@ async def get_video(
     # Get stats
     likes_count = await db.execute(
         select(func.count(Vote.id)).where(
-            Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
+            Vote.video_id == video.id, cast(Vote.direction, String) == "like"
         )
     )
     not_likes_count = await db.execute(
         select(func.count(Vote.id)).where(
-            Vote.video_id == video.id, Vote.direction == VoteDirection.NOT_LIKE
+            Vote.video_id == video.id, cast(Vote.direction, String) == "not_like"
         )
     )
     views_count = await db.execute(

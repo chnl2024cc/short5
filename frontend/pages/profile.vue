@@ -35,12 +35,28 @@
 
     <!-- Content -->
     <div class="max-w-4xl mx-auto px-4 py-6">
-      <!-- Loading State -->
+      <!-- Profile Loading State -->
       <div
-        v-if="loading && !profile"
+        v-if="profilePending"
         class="flex items-center justify-center py-20"
       >
         <div class="text-gray-400 text-lg">Loading profile...</div>
+      </div>
+
+      <!-- Profile Error State -->
+      <div
+        v-else-if="profileError"
+        class="bg-red-900/50 border border-red-700 rounded-lg p-6 text-center"
+      >
+        <p class="text-red-300 mb-4">
+          {{ profileError.message || 'Failed to load profile' }}
+        </p>
+        <button
+          @click="refreshProfile"
+          class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+        >
+          Retry
+        </button>
       </div>
 
       <!-- Profile Content -->
@@ -50,14 +66,14 @@
           <div class="flex items-start gap-6">
             <!-- Avatar -->
             <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-3xl font-bold">
-              {{ profile.username.charAt(0).toUpperCase() }}
+              {{ profile.username?.charAt(0)?.toUpperCase() || 'U' }}
             </div>
             
             <!-- User Info -->
             <div class="flex-1">
-              <h2 class="text-3xl font-bold mb-2">{{ profile.username }}</h2>
-              <p class="text-gray-400 mb-4">{{ profile.email }}</p>
-              <p class="text-sm text-gray-500">
+              <h2 class="text-3xl font-bold mb-2">{{ profile.username || 'User' }}</h2>
+              <p class="text-gray-400 mb-4">{{ profile.email || '' }}</p>
+              <p v-if="profile.created_at" class="text-sm text-gray-500">
                 Joined {{ formatDate(profile.created_at) }}
               </p>
             </div>
@@ -139,10 +155,18 @@
 
           <!-- Loading Videos -->
           <div
-            v-if="videosLoading && videos.length === 0"
+            v-if="videosPending && videos.length === 0"
             class="text-center py-8 text-gray-400"
           >
             Loading videos...
+          </div>
+
+          <!-- Videos Error -->
+          <div
+            v-else-if="videosError && videos.length === 0"
+            class="bg-gray-900 rounded-lg p-6 text-center text-gray-400"
+          >
+            <p>Failed to load videos. <button @click="refreshVideos" class="text-blue-400 hover:text-blue-300 underline">Retry</button></p>
           </div>
 
           <!-- Empty State -->
@@ -203,10 +227,10 @@
                 
                 <!-- Status Badge -->
                 <div
-                  v-if="video.status !== 'ready'"
+                  v-if="video.status && video.status !== 'ready'"
                   class="absolute top-2 left-2 bg-yellow-600 text-white text-xs px-2 py-1 rounded"
                 >
-                  {{ video.status === 'processing' ? 'Processing...' : video.status }}
+                  {{ getStatusLabel(video.status) }}
                 </div>
 
                 <!-- Duration Badge -->
@@ -263,7 +287,7 @@
 
           <!-- Load More -->
           <div
-            v-if="hasMoreVideos && !videosLoading"
+            v-if="hasMoreVideos && !videosPending && videos.length > 0"
             class="flex justify-center mt-6"
           >
             <button
@@ -275,26 +299,12 @@
           </div>
         </div>
       </div>
-
-      <!-- Error State -->
-      <div
-        v-else-if="error"
-        class="bg-red-900/50 border border-red-700 rounded-lg p-6 text-center"
-      >
-        <p class="text-red-300">{{ error }}</p>
-        <button
-          @click="loadProfile"
-          class="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
-        >
-          Retry
-        </button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
 
@@ -305,22 +315,89 @@ definePageMeta({
 const authStore = useAuthStore()
 const api = useApi()
 
-const profile = ref<any | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
+// Profile data using useAsyncData (Nuxt best practice)
+const {
+  data: profile,
+  pending: profilePending,
+  error: profileError,
+  refresh: refreshProfile,
+} = await useAsyncData(
+  'user-profile',
+  async () => {
+    // Initialize auth from storage if needed
+    if (process.client && !authStore.token) {
+      authStore.initFromStorage()
+    }
+    return await authStore.fetchProfile()
+  },
+  {
+    server: false, // Only fetch on client since it requires auth
+    lazy: true, // Don't block navigation
+    default: () => null,
+  }
+)
 
+// Videos data - using manual loading for pagination support
 const videos = ref<any[]>([])
-const videosLoading = ref(false)
-const nextVideoCursor = ref<string | null>(null)
+const videosPending = ref(false)
+const videosError = ref<Error | null>(null)
+const videosCursor = ref<string | null>(null)
 const hasMoreVideos = ref(true)
 
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+const loadVideos = async (cursor?: string | null) => {
+  if (videosPending.value || (!hasMoreVideos.value && cursor)) return
+  
+  videosPending.value = true
+  videosError.value = null
+  
+  try {
+    const response = await api.get<{
+      videos: any[]
+      next_cursor: string | null
+      has_more: boolean
+    }>(`/users/me/videos${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)
+    
+    if (cursor) {
+      videos.value.push(...(response.videos || []))
+    } else {
+      videos.value = response.videos || []
+    }
+    
+    videosCursor.value = response.next_cursor
+    hasMoreVideos.value = response.has_more || false
+  } catch (err: any) {
+    console.error('Failed to load videos:', err)
+    videosError.value = err
+  } finally {
+    videosPending.value = false
+  }
+}
+
+const refreshVideos = () => {
+  videosCursor.value = null
+  hasMoreVideos.value = true
+  loadVideos()
+}
+
+// Load initial videos
+onMounted(() => {
+  loadVideos()
+})
+
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Unknown date'
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Invalid date'
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  } catch (e) {
+    console.error('Error formatting date:', e)
+    return 'Invalid date'
+  }
 }
 
 const formatNumber = (num: number): string => {
@@ -334,59 +411,31 @@ const formatNumber = (num: number): string => {
 }
 
 const formatDuration = (seconds: number): string => {
+  if (!seconds || seconds < 0) return '0:00'
   const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
+  const secs = Math.floor(seconds % 60)
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-const loadProfile = async () => {
-  loading.value = true
-  error.value = null
-  
-  try {
-    profile.value = await authStore.fetchProfile()
-  } catch (err: any) {
-    error.value = err.message || 'Failed to load profile'
-  } finally {
-    loading.value = false
+const getStatusLabel = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    uploading: 'Uploading...',
+    processing: 'Processing...',
+    ready: 'Ready',
+    failed: 'Failed',
+    rejected: 'Rejected',
   }
-}
-
-const loadMyVideos = async (cursor?: string) => {
-  if (videosLoading.value || (!hasMoreVideos.value && cursor)) return
-  
-  videosLoading.value = true
-  try {
-    const response = await api.get<{
-      videos: any[]
-      next_cursor: string | null
-      has_more: boolean
-    }>(`/users/me/videos${cursor ? `?cursor=${cursor}` : ''}`)
-    
-    if (cursor) {
-      videos.value.push(...response.videos)
-    } else {
-      videos.value = response.videos
-    }
-    
-    nextVideoCursor.value = response.next_cursor
-    hasMoreVideos.value = response.has_more
-  } catch (err) {
-    console.error('Failed to load videos:', err)
-  } finally {
-    videosLoading.value = false
-  }
+  return statusMap[status] || status
 }
 
 const loadMoreVideos = () => {
-  if (hasMoreVideos.value && nextVideoCursor.value) {
-    loadMyVideos(nextVideoCursor.value)
+  if (hasMoreVideos.value && videosCursor.value) {
+    loadVideos(videosCursor.value)
   }
 }
 
 const viewVideo = (video: any) => {
   // Navigate to feed or video detail page
-  // For now, just go back to feed
   navigateTo('/')
 }
 
@@ -396,12 +445,16 @@ const handleLogout = async () => {
     navigateTo('/login')
   } catch (err) {
     console.error('Logout failed:', err)
+    // Still navigate to login even if logout API call fails
+    navigateTo('/login')
   }
 }
 
 onMounted(() => {
-  loadProfile()
-  loadMyVideos()
+  // Initialize auth from storage if needed
+  if (process.client && !authStore.token) {
+    authStore.initFromStorage()
+  }
 })
 </script>
 

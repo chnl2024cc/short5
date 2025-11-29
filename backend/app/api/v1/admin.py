@@ -3,7 +3,7 @@ Admin Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, cast, String, and_, or_
 from typing import Optional
 from pydantic import BaseModel
 
@@ -68,7 +68,7 @@ async def get_pending_videos(
         # Get stats
         likes_count = await db.execute(
             select(func.count(Vote.id)).where(
-                Vote.video_id == video.id, Vote.direction == VoteDirection.LIKE
+                Vote.video_id == video.id, cast(Vote.direction, String) == "like"
             )
         )
         views_count = await db.execute(
