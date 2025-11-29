@@ -132,6 +132,7 @@ services:
     container_name: short5_frontend
     environment:
       NUXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+      NUXT_PUBLIC_BACKEND_BASE_URL: http://backend:8000  # Use Docker service name for internal communication
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     volumes:

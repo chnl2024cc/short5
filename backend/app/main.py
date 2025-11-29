@@ -41,7 +41,9 @@ app.include_router(api_router, prefix="/api/v1")
 
 # Serve static files for processed videos (development mode)
 # This serves both uploaded files and processed files (HLS, thumbnails)
-uploads_dir = Path("uploads")
+# Use absolute path to ensure it works regardless of working directory
+uploads_dir = Path("/app/uploads")
+uploads_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
 if uploads_dir.exists():
     app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
     logger.info(f"Serving static files from: {uploads_dir.absolute()}")

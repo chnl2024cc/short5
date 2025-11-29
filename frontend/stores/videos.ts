@@ -4,32 +4,23 @@
 import { defineStore } from 'pinia'
 import { useApi } from '~/composables/useApi'
 import { useAuthStore } from './auth'
+import type { Video, FeedResponse, PendingVote } from '~/types/video'
 
 const PENDING_VOTES_KEY = 'pending_votes'
 
-interface PendingVote {
-  videoId: string
-  direction: 'like' | 'not_like'
-  timestamp: number
-}
-
 export const useVideosStore = defineStore('videos', {
   state: () => ({
-    feed: [] as any[],
-    likedVideos: [] as any[],
+    feed: [] as Video[],
+    likedVideos: [] as Video[],
     currentCursor: null as string | null,
     hasMore: true,
   }),
 
   actions: {
-    async fetchFeed(cursor?: string) {
+    async fetchFeed(cursor?: string): Promise<FeedResponse> {
       const api = useApi()
       try {
-        const response = await api.get<{
-          videos: any[]
-          next_cursor: string | null
-          has_more: boolean
-        }>(`/feed${cursor ? `?cursor=${cursor}` : ''}`)
+        const response = await api.get<FeedResponse>(`/feed${cursor ? `?cursor=${cursor}` : ''}`)
         
         this.currentCursor = response.next_cursor
         this.hasMore = response.has_more
@@ -175,14 +166,10 @@ export const useVideosStore = defineStore('videos', {
       }
     },
 
-    async fetchLikedVideos(cursor?: string) {
+    async fetchLikedVideos(cursor?: string): Promise<FeedResponse> {
       const api = useApi()
       try {
-        const response = await api.get<{
-          videos: any[]
-          next_cursor: string | null
-          has_more: boolean
-        }>(`/users/me/liked${cursor ? `?cursor=${cursor}` : ''}`)
+        const response = await api.get<FeedResponse>(`/users/me/liked${cursor ? `?cursor=${cursor}` : ''}`)
         
         if (cursor) {
           this.likedVideos.push(...response.videos)
@@ -193,6 +180,17 @@ export const useVideosStore = defineStore('videos', {
         return response
       } catch (error) {
         console.error('Failed to fetch liked videos:', error)
+        throw error
+      }
+    },
+
+    async getVideoStatus(videoId: string): Promise<Video> {
+      const api = useApi()
+      try {
+        const response = await api.get<Video>(`/videos/${videoId}`)
+        return response
+      } catch (error) {
+        console.error('Failed to get video status:', error)
         throw error
       }
     },

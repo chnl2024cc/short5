@@ -123,12 +123,12 @@
         </div>
 
         <!-- Success Message -->
-        <div v-if="success" class="bg-green-900/50 border border-green-700 rounded-lg p-3">
+        <div v-if="success && !uploadedVideoId" class="bg-green-900/50 border border-green-700 rounded-lg p-3">
           <p class="text-sm text-green-300">{{ success }}</p>
         </div>
 
         <!-- Upload Progress -->
-        <div v-if="uploading" class="space-y-2">
+        <div v-if="uploading && !uploadedVideoId" class="space-y-2">
           <div class="flex justify-between text-sm text-gray-400">
             <span>Uploading...</span>
             <span>{{ uploadProgress }}%</span>
@@ -140,6 +140,15 @@
             />
           </div>
         </div>
+
+        <!-- Video Processing Status -->
+        <VideoProcessingStatus
+          v-if="uploadedVideoId"
+          :video-id="uploadedVideoId"
+          :auto-poll="true"
+          @ready="handleVideoReady"
+          @failed="handleVideoFailed"
+        />
 
         <!-- Submit Button -->
         <div class="flex gap-4">
@@ -201,6 +210,7 @@ const uploadProgress = ref(0)
 const error = ref<string | null>(null)
 const fileError = ref<string | null>(null)
 const success = ref<string | null>(null)
+const uploadedVideoId = ref<string | null>(null)
 
 // File size limit: 500MB
 const MAX_FILE_SIZE = 500 * 1024 * 1024
@@ -318,31 +328,21 @@ const handleUpload = async () => {
       }
     }, 200)
     
-    await videosStore.uploadVideo(
+    const uploadResponse = (await videosStore.uploadVideo(
       selectedFile.value,
       form.value.title || undefined,
       form.value.description || undefined
-    )
+    )) as { video_id: string; status: string; message?: string }
     
     if (progressInterval) {
       clearInterval(progressInterval)
     }
     uploadProgress.value = 100
     
-    success.value = 'Video uploaded successfully! Processing will begin shortly.'
-    
-    // Reset form after a delay
-    setTimeout(() => {
-      clearFile()
-      form.value = { title: '', description: '' }
-      uploadProgress.value = 0
-      uploading.value = false
-      
-      // Redirect to profile page after 2 seconds to see the uploaded video
-      setTimeout(() => {
-        navigateTo('/profile')
-      }, 2000)
-    }, 2000)
+    // Store the uploaded video ID for status monitoring
+    uploadedVideoId.value = uploadResponse?.video_id || ''
+    success.value = 'Video uploaded successfully! Processing has started.'
+    uploading.value = false
   } catch (err: any) {
     if (progressInterval) {
       clearInterval(progressInterval)
@@ -353,11 +353,26 @@ const handleUpload = async () => {
   }
 }
 
+const handleVideoReady = (videoData: any) => {
+  success.value = 'Video processing completed! Your video is now ready.'
+  
+  // Redirect to profile page after 3 seconds to see the uploaded video
+  setTimeout(() => {
+    navigateTo('/profile')
+  }, 3000)
+}
+
+const handleVideoFailed = (errorMessage: string) => {
+  error.value = `Video processing failed: ${errorMessage}`
+  uploadedVideoId.value = null
+}
+
 const handleCancel = () => {
   if (uploading.value) return
   
   clearFile()
   form.value = { title: '', description: '' }
+  uploadedVideoId.value = null
   navigateTo('/')
 }
 

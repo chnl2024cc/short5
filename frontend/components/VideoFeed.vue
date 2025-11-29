@@ -27,6 +27,7 @@
         :style="{ zIndex: videos.length - index }"
         @swiped="handleSwipe"
         @view-update="handleViewUpdate"
+        @error="handleVideoError"
       />
     </div>
   </div>
@@ -36,11 +37,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import { useApi } from '~/composables/useApi'
+import type { Video, FeedResponse } from '~/types/video'
 
 const videosStore = useVideosStore()
 const api = useApi()
 
-const videos = ref<any[]>([])
+const videos = ref<Video[]>([])
 const currentIndex = ref(0)
 const loading = ref(false)
 const nextCursor = ref<string | null>(null)
@@ -57,11 +59,7 @@ const loadFeed = async (cursor?: string) => {
   
   loading.value = true
   try {
-    const response = await api.get<{
-      videos: any[]
-      next_cursor: string | null
-      has_more: boolean
-    }>(`/feed${cursor ? `?cursor=${cursor}` : ''}`)
+    const response = await api.get<FeedResponse>(`/feed${cursor ? `?cursor=${cursor}` : ''}`)
     
     if (cursor) {
       // Append to existing videos
@@ -114,6 +112,19 @@ const handleViewUpdate = async (seconds: number) => {
       })
     } catch (error) {
       console.error('Failed to update view:', error)
+    }
+  }
+}
+
+const handleVideoError = (error: Error) => {
+  console.error('Video playback error:', error)
+  // Remove the problematic video from feed and move to next
+  const currentVideo = videos.value[currentIndex.value]
+  if (currentVideo) {
+    videos.value.splice(currentIndex.value, 1)
+    // If we're at the end, try to load more
+    if (currentIndex.value >= videos.value.length - preloadCount && hasMore.value) {
+      loadFeed(nextCursor.value || undefined)
     }
   }
 }

@@ -10,17 +10,68 @@
     @mouseup="onMouseEnd"
     @mouseleave="onMouseEnd"
   >
+    <!-- Loading State -->
+    <div
+      v-if="isLoading"
+      class="absolute inset-0 flex items-center justify-center bg-black/80 z-10"
+    >
+      <div class="text-center text-white">
+        <div class="loading-spinner mb-4"></div>
+        <p class="text-sm">Loading video...</p>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div
+      v-if="hasError && !isRetrying"
+      class="absolute inset-0 flex items-center justify-center bg-black/80 z-10"
+    >
+      <div class="text-center text-white px-4">
+        <p class="text-lg mb-2">Failed to load video</p>
+        <p class="text-sm text-gray-400 mb-4">{{ errorMessage }}</p>
+        <button
+          @click="retryVideoLoad"
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+
+    <!-- Video Thumbnail Placeholder -->
+    <div
+      v-if="video.thumbnail && (isLoading || hasError)"
+      class="absolute inset-0 bg-cover bg-center"
+      :style="{ backgroundImage: `url(${video.thumbnail})` }"
+    >
+      <div class="absolute inset-0 bg-black/40"></div>
+    </div>
+
     <video
       ref="videoElement"
-      :src="video.url_hls || video.url_mp4"
       class="w-full h-full object-contain"
-      :autoplay="isActive"
+      :class="{ 'opacity-0': isLoading || hasError }"
+      :autoplay="isActive && !isLoading && !hasError"
       :muted="true"
       :loop="true"
       playsinline
+      preload="auto"
       @loadedmetadata="onVideoLoaded"
       @timeupdate="onTimeUpdate"
+      @waiting="onVideoWaiting"
+      @playing="onVideoPlaying"
+      @canplay="onVideoCanPlay"
+      @error="onVideoError"
+      @loadstart="onVideoLoadStart"
     />
+    
+    <!-- Buffering Indicator -->
+    <div
+      v-if="isBuffering && !isLoading"
+      class="absolute inset-0 flex items-center justify-center bg-black/40 z-20 pointer-events-none"
+    >
+      <div class="loading-spinner"></div>
+    </div>
     
     <!-- Swipe Overlay -->
     <div
@@ -34,7 +85,7 @@
     </div>
     
     <!-- Video Info Overlay -->
-    <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent text-white">
+    <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent text-white z-30">
       <h3 class="font-bold text-lg">{{ video.title || 'Untitled' }}</h3>
       <p class="text-sm">{{ video.user?.username }}</p>
       <div class="flex gap-4 mt-2 text-sm">
@@ -46,26 +97,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useVideosStore } from '~/stores/videos'
+import type { Video } from '~/types/video'
+
+// Lazy load hls.js - using function to prevent Vite from analyzing at build time
+let hlsModule: any = null
+let hlsLoaded = false
+
+const loadHls = async (): Promise<any> => {
+  if (!process.client) return null
+  
+  if (hlsLoaded && hlsModule) {
+    return hlsModule
+  }
+  
+  try {
+    // Use dynamic import with string literal to prevent static analysis
+    const moduleName = 'hls.js'
+    hlsModule = await import(/* @vite-ignore */ moduleName)
+    hlsModule = hlsModule.default || hlsModule
+    hlsLoaded = true
+    return hlsModule
+  } catch (err) {
+    console.warn('Failed to load hls.js:', err)
+    return null
+  }
+}
+
+// Get Hls - returns the loaded Hls class
+const getHls = async () => {
+  if (process.client) {
+    return await loadHls()
+  }
+  return null
+}
 
 interface Props {
-  video: {
-    id: string
-    title?: string
-    description?: string
-    url_hls?: string
-    url_mp4?: string
-    thumbnail?: string
-    user?: {
-      id: string
-      username: string
-    }
-    stats?: {
-      likes: number
-      views: number
-    }
-  }
+  video: Video
   isActive?: boolean
 }
 
@@ -76,11 +145,25 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   swiped: [direction: 'like' | 'not_like']
   viewUpdate: [seconds: number]
+  error: [error: Error]
 }>()
 
 const videosStore = useVideosStore()
 const swipeContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
+let hlsInstance: any = null // Hls instance (type from hls.js library loaded via plugin)
+
+// Video state
+const isLoading = ref(true)
+const hasError = ref(false)
+const errorMessage = ref('')
+const isRetrying = ref(false)
+const isBuffering = ref(false)
+const retryCount = ref(0)
+const maxRetries = 3
+const retryDelay = 2000 // 2 seconds
+let retryTimeout: NodeJS.Timeout | null = null
+let bufferingTimeout: NodeJS.Timeout | null = null
 
 // Swipe state
 const startX = ref(0)
@@ -193,13 +276,354 @@ const handleSwipeEnd = () => {
   currentY.value = 0
 }
 
-// Video handlers
+// Initialize HLS video playback with proper error handling
+const initializeVideo = async (retry = false) => {
+  if (!videoElement.value) return
+  if (!process.client) return // Only run on client side
+  
+  // Reset error state on new initialization
+  if (!retry) {
+    hasError.value = false
+    errorMessage.value = ''
+    retryCount.value = 0
+  }
+  
+  isLoading.value = true
+  isRetrying.value = retry
+  
+  const video = videoElement.value
+  
+  // Clean up previous HLS instance
+  if (hlsInstance) {
+    try {
+      hlsInstance.destroy()
+    } catch (e) {
+      console.warn('Error destroying HLS instance:', e)
+    }
+    hlsInstance = null
+  }
+  
+  // Clear any existing retry timeout
+  if (retryTimeout) {
+    clearTimeout(retryTimeout)
+    retryTimeout = null
+  }
+  
+  try {
+    // Handle HLS playback
+    if (props.video.url_hls) {
+      const hlsSrc = props.video.url_hls
+      
+      // Check if browser supports native HLS (Safari)
+      if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        video.src = hlsSrc
+        video.load()
+        
+        // Set up error handlers for native HLS
+        video.addEventListener('error', handleNativeVideoError, { once: true })
+      } else {
+        // Load hls.js dynamically for browsers with MSE support (Chrome, Firefox, Edge)
+        const Hls = await loadHls()
+        
+        if (Hls && Hls.isSupported()) {
+          // Use hls.js for browsers with MSE support
+          hlsInstance = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          backBufferLength: 90,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+          maxBufferSize: 60 * 1000 * 1000, // 60MB
+          maxBufferHole: 0.5,
+          highBufferWatchdogPeriod: 2,
+          nudgeOffset: 0.1,
+          nudgeMaxRetry: 3,
+          maxFragLoadingTimeOut: 20,
+          fragLoadingTimeOut: 20,
+          manifestLoadingTimeOut: 10,
+          levelLoadingTimeOut: 10,
+        })
+        
+        hlsInstance.loadSource(hlsSrc)
+        hlsInstance.attachMedia(video)
+        
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+          isLoading.value = false
+          if (props.isActive) {
+            video.play().catch((err) => {
+              console.warn('Autoplay blocked:', err)
+              // Autoplay blocked, user interaction required
+            })
+          }
+        })
+        
+        hlsInstance.on(Hls.Events.ERROR, (event: any, data: any) => {
+          handleHlsError(data)
+        })
+        
+        // Monitor buffering
+          hlsInstance.on(Hls.Events.BUFFER_APPENDING, () => {
+            isBuffering.value = false
+            if (bufferingTimeout) {
+              clearTimeout(bufferingTimeout)
+              bufferingTimeout = null
+            }
+          })
+        } else {
+          console.warn('HLS.js not available or not supported, falling back to MP4')
+          // Fallback to MP4 if available
+          if (props.video.url_mp4) {
+            video.src = props.video.url_mp4
+            video.load()
+            video.addEventListener('error', handleNativeVideoError, { once: true })
+          } else {
+            throw new Error('HLS not supported and no MP4 fallback available')
+          }
+        }
+      }
+    } else if (props.video.url_mp4) {
+      // Direct MP4 playback (no HLS)
+      video.src = props.video.url_mp4
+      video.load()
+      video.addEventListener('error', handleNativeVideoError, { once: true })
+    } else {
+      throw new Error('No video URL available')
+    }
+  } catch (error: any) {
+    console.error('Error initializing video:', error)
+    handleVideoError(error)
+  }
+}
+
+// Handle HLS-specific errors with retry logic
+const handleHlsError = async (data: any) => {
+  if (!process.client || !hlsInstance) return
+  
+  const Hls = await loadHls()
+  if (!Hls) return
+  
+  console.error('HLS error:', data)
+  
+  if (data.fatal) {
+    switch (data.type) {
+      case Hls.ErrorTypes.NETWORK_ERROR:
+        console.error('Fatal network error, attempting recovery...')
+        if (retryCount.value < maxRetries) {
+          retryCount.value++
+          retryTimeout = setTimeout(() => {
+            hlsInstance?.startLoad()
+          }, retryDelay)
+        } else {
+          // Network error after max retries, try MP4 fallback
+          console.error('Network error persists, falling back to MP4')
+          await fallbackToMp4()
+        }
+        break
+      case Hls.ErrorTypes.MEDIA_ERROR:
+        console.error('Fatal media error, attempting recovery...')
+        try {
+          hlsInstance.recoverMediaError()
+        } catch (e) {
+          console.error('Media error recovery failed:', e)
+          if (retryCount.value < maxRetries) {
+            retryCount.value++
+            retryTimeout = setTimeout(() => {
+              hlsInstance?.recoverMediaError()
+            }, retryDelay)
+          } else {
+            await fallbackToMp4()
+          }
+        }
+        break
+      default:
+        console.error('Fatal HLS error, falling back to MP4')
+        await fallbackToMp4()
+        break
+    }
+  }
+}
+
+// Fallback to MP4 if HLS fails
+const fallbackToMp4 = async () => {
+  if (!videoElement.value || !props.video.url_mp4) {
+    handleVideoError(new Error('HLS failed and no MP4 fallback available'))
+    return
+  }
+  
+  console.log('Falling back to MP4 playback')
+  
+  if (hlsInstance) {
+    try {
+      hlsInstance.destroy()
+    } catch (e) {
+      console.warn('Error destroying HLS during fallback:', e)
+    }
+    hlsInstance = null
+  }
+  
+  const video = videoElement.value
+  video.src = props.video.url_mp4
+  video.load()
+  video.addEventListener('error', handleNativeVideoError, { once: true })
+}
+
+// Handle native video element errors
+const handleNativeVideoError = (event: Event) => {
+  const video = event.target as HTMLVideoElement
+  const error = video.error
+  
+  if (error) {
+    let message = 'Unknown video error'
+    switch (error.code) {
+      case MediaError.MEDIA_ERR_ABORTED:
+        message = 'Video loading aborted'
+        break
+      case MediaError.MEDIA_ERR_NETWORK:
+        message = 'Network error while loading video'
+        if (retryCount.value < maxRetries) {
+          retryCount.value++
+          retryTimeout = setTimeout(() => {
+            video.load()
+          }, retryDelay)
+          return
+        }
+        break
+      case MediaError.MEDIA_ERR_DECODE:
+        message = 'Video decoding error'
+        break
+      case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+        message = 'Video format not supported'
+        break
+    }
+    handleVideoError(new Error(message))
+  }
+}
+
+// General video error handler
+const handleVideoError = (error: Error) => {
+  console.error('Video error:', error)
+  hasError.value = true
+  errorMessage.value = error.message || 'Failed to load video'
+  isLoading.value = false
+  isRetrying.value = false
+  emit('error', error)
+}
+
+// Retry video load
+const retryVideoLoad = () => {
+  retryCount.value = 0
+  initializeVideo(true)
+}
+
+// Watch for video changes (when video prop changes)
+watch(
+  () => props.video.id,
+  (newId, oldId) => {
+    if (newId !== oldId && process.client) {
+      // Clean up previous video
+      cleanupVideo()
+      // Small delay to ensure DOM is updated
+      nextTick(() => {
+        initializeVideo()
+      })
+    }
+  }
+)
+
+// Watch for active state changes
+watch(
+  () => props.isActive,
+  (isActive) => {
+    if (!videoElement.value) return
+    
+    if (isActive && !isLoading.value && !hasError.value) {
+      videoElement.value.play().catch((err) => {
+        console.warn('Play failed:', err)
+      })
+    } else if (!isActive) {
+      videoElement.value.pause()
+    }
+  }
+)
+
+// Cleanup function
+const cleanupVideo = () => {
+  // Clear timeouts
+  if (retryTimeout) {
+    clearTimeout(retryTimeout)
+    retryTimeout = null
+  }
+  if (bufferingTimeout) {
+    clearTimeout(bufferingTimeout)
+    bufferingTimeout = null
+  }
+  
+  // Clean up HLS instance
+  if (hlsInstance) {
+    try {
+      hlsInstance.destroy()
+    } catch (e) {
+      console.warn('Error destroying HLS during cleanup:', e)
+    }
+    hlsInstance = null
+  }
+  
+  // Clean up video element
+  if (videoElement.value) {
+    videoElement.value.pause()
+    videoElement.value.src = ''
+    videoElement.value.load()
+  }
+  
+  // Reset state
+  isLoading.value = true
+  hasError.value = false
+  isBuffering.value = false
+  isRetrying.value = false
+}
+
+// Video event handlers
+const onVideoLoadStart = () => {
+  isLoading.value = true
+  hasError.value = false
+}
+
 const onVideoLoaded = () => {
+  isLoading.value = false
   if (videoElement.value && props.isActive) {
-    videoElement.value.play().catch(() => {
+    videoElement.value.play().catch((err) => {
+      console.warn('Autoplay blocked:', err)
       // Autoplay blocked, user interaction required
     })
   }
+}
+
+const onVideoCanPlay = () => {
+  isLoading.value = false
+  isBuffering.value = false
+}
+
+const onVideoPlaying = () => {
+  isLoading.value = false
+  isBuffering.value = false
+  if (bufferingTimeout) {
+    clearTimeout(bufferingTimeout)
+    bufferingTimeout = null
+  }
+}
+
+const onVideoWaiting = () => {
+  // Show buffering indicator after 500ms
+  bufferingTimeout = setTimeout(() => {
+    if (videoElement.value && !videoElement.value.ended) {
+      isBuffering.value = true
+    }
+  }, 500)
+}
+
+const onVideoError = (event: Event) => {
+  handleNativeVideoError(event)
 }
 
 const onTimeUpdate = () => {
@@ -210,17 +634,17 @@ const onTimeUpdate = () => {
 }
 
 onMounted(() => {
-  if (props.isActive && videoElement.value) {
-    videoElement.value.play().catch(() => {
-      // Autoplay may be blocked
+  // Initialize video playback when component is mounted
+  if (process.client) {
+    nextTick(() => {
+      initializeVideo()
     })
   }
 })
 
 onUnmounted(() => {
-  if (videoElement.value) {
-    videoElement.value.pause()
-  }
+  // Complete cleanup
+  cleanupVideo()
 })
 </script>
 
@@ -249,5 +673,19 @@ onUnmounted(() => {
   @apply text-6xl font-bold text-white;
   text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
   transform: rotate(-5deg);
+}
+
+.loading-spinner {
+  @apply w-12 h-12 border-4 border-white/20 border-t-white rounded-full;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 </style>

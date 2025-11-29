@@ -341,9 +341,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
+import { useVideosStore } from '~/stores/videos'
+import type { Video, FeedResponse } from '~/types/video'
 
 definePageMeta({
   middleware: 'auth',
@@ -375,7 +377,7 @@ const {
 )
 
 // Videos data - using manual loading for pagination support
-const videos = ref<any[]>([])
+const videos = ref<Video[]>([])
 const videosPending = ref(false)
 const videosError = ref<Error | null>(null)
 const videosCursor = ref<string | null>(null)
@@ -389,11 +391,7 @@ const loadVideos = async (cursor?: string | null) => {
   videosError.value = null
   
   try {
-    const response = await api.get<{
-      videos: any[]
-      next_cursor: string | null
-      has_more: boolean
-    }>(`/users/me/videos${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)
+    const response = await api.get<FeedResponse>(`/users/me/videos${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)
     
     if (cursor) {
       videos.value.push(...(response.videos || []))
@@ -403,9 +401,9 @@ const loadVideos = async (cursor?: string | null) => {
     
     videosCursor.value = response.next_cursor
     hasMoreVideos.value = response.has_more || false
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Failed to load videos:', err)
-    videosError.value = err
+    videosError.value = err instanceof Error ? err : new Error(String(err))
   } finally {
     videosPending.value = false
   }
@@ -414,16 +412,87 @@ const loadVideos = async (cursor?: string | null) => {
 const refreshVideos = () => {
   videosCursor.value = null
   hasMoreVideos.value = true
-  loadVideos()
+  loadVideos().then(() => {
+    startPollingProcessingVideos()
+  })
 }
+
+// Watch for changes in video status to restart polling if needed
+watch(
+  () => videos.value.map((v) => v.status),
+  () => {
+    startPollingProcessingVideos()
+  },
+  { deep: true }
+)
 
 const handleRefreshProfile = () => {
   refreshProfile()
 }
 
+// Poll for processing videos
+let pollInterval: NodeJS.Timeout | null = null
+
+const startPollingProcessingVideos = () => {
+  // Clear existing interval
+  if (pollInterval) {
+    clearInterval(pollInterval)
+  }
+  
+  // Check if there are any processing videos
+  const hasProcessingVideos = videos.value.some(
+    (v) => v.status === 'processing' || v.status === 'uploading'
+  )
+  
+  if (!hasProcessingVideos) {
+    return // No need to poll
+  }
+  
+  // Poll every 3 seconds for processing videos
+  pollInterval = setInterval(() => {
+    const processingVideos = videos.value.filter(
+      (v) => v.status === 'processing' || v.status === 'uploading'
+    )
+    
+    if (processingVideos.length === 0) {
+      // No more processing videos, stop polling
+      if (pollInterval) {
+        clearInterval(pollInterval)
+        pollInterval = null
+      }
+      return
+    }
+    
+    // Check status for each processing video
+    processingVideos.forEach(async (video) => {
+      try {
+        const videosStore = useVideosStore()
+        const updatedVideo = await videosStore.getVideoStatus(video.id)
+        
+        // Update video in list
+        const index = videos.value.findIndex((v) => v.id === video.id)
+        if (index >= 0) {
+          videos.value[index] = updatedVideo
+        }
+      } catch (error) {
+        console.error(`Failed to check status for video ${video.id}:`, error)
+      }
+    })
+  }, 3000) // Poll every 3 seconds
+}
+
 // Load initial videos
 onMounted(() => {
-  loadVideos()
+  loadVideos().then(() => {
+    // Start polling after videos are loaded
+    startPollingProcessingVideos()
+  })
+})
+
+onUnmounted(() => {
+  if (pollInterval) {
+    clearInterval(pollInterval)
+  }
 })
 
 const formatDate = (dateString: string | null | undefined): string => {
@@ -481,7 +550,7 @@ const viewVideo = (video: any) => {
   navigateTo('/')
 }
 
-const handleDeleteVideo = async (video: any) => {
+const handleDeleteVideo = async (video: Video) => {
   // Confirmation dialog
   if (!confirm(`Are you sure you want to delete "${video.title || 'this video'}"? This action cannot be undone.`)) {
     return
@@ -499,15 +568,16 @@ const handleDeleteVideo = async (video: any) => {
     await refreshProfile()
     
     // You could use a toast notification here for success message
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Failed to delete video:', err)
+    const error = err as { response?: { status?: number; statusText?: string; data?: { detail?: string } }; message?: string }
     console.error('Error details:', {
-      status: err.response?.status,
-      statusText: err.response?.statusText,
-      data: err.response?.data,
-      message: err.message
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
     })
-    const errorMessage = err.response?.data?.detail || err.message || 'Failed to delete video. Please try again.'
+    const errorMessage = error.response?.data?.detail || error.message || 'Failed to delete video. Please try again.'
     alert(errorMessage)
   } finally {
     isDeleting.value = null
