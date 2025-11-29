@@ -40,9 +40,13 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 # Serve static files for processed videos (development mode)
+# This serves both uploaded files and processed files (HLS, thumbnails)
 uploads_dir = Path("uploads")
 if uploads_dir.exists():
     app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+    logger.info(f"Serving static files from: {uploads_dir.absolute()}")
+else:
+    logger.warning(f"Uploads directory not found: {uploads_dir.absolute()}")
 
 
 # Global exception handler

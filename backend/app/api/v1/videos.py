@@ -84,9 +84,11 @@ async def upload_video(
     await db.commit()
     
     # Trigger video processing task
+    # Use apply_async to ensure task is sent to the correct queue
     celery_app.send_task(
         "process_video",
         args=[str(video.id), str(file_path)],
+        queue="celery",  # Explicitly specify queue
     )
     
     return {

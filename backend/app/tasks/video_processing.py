@@ -1,15 +1,9 @@
 """
 Video Processing Tasks (Celery)
+Note: The actual video processing is done by the video_worker service.
+This file is kept for potential future backend tasks, but video processing
+is handled entirely by the video_worker service via the "process_video" task.
 """
-from app.celery_app import celery_app
-
-
-@celery_app.task(name="process_video")
-def process_video(video_id: str):
-    """
-    Process video: transcode to HLS, create thumbnail
-    This task is triggered by the video worker
-    """
-    # Implementation will be in video_worker
-    pass
+# No task definition needed here - video_worker/worker.py defines the actual task
+# Backend just sends tasks using celery_app.send_task("process_video", ...)
 

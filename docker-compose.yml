@@ -112,6 +112,7 @@ services:
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-short5-videos}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      C_FORCE_ROOT: "true"  # Allow running as root in container (development)
     volumes:
       - video_worker_temp:/tmp/video_processing
       - backend_uploads:/app/uploads
@@ -120,7 +121,7 @@ services:
       - redis
     networks:
       - short5_network
-    command: python worker.py
+    command: celery -A worker worker --loglevel=info --concurrency=2
 
   # Nuxt Frontend (Development)
   frontend:
