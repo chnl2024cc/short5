@@ -338,9 +338,9 @@ const handleUpload = async () => {
       uploadProgress.value = 0
       uploading.value = false
       
-      // Redirect to feed after 2 seconds
+      // Redirect to profile page after 2 seconds to see the uploaded video
       setTimeout(() => {
-        navigateTo('/')
+        navigateTo('/profile')
       }, 2000)
     }, 2000)
   } catch (err: any) {
