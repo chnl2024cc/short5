@@ -1,9 +1,8 @@
 """
 Video Model
 """
-from sqlalchemy import Column, String, Text, Integer, BigInteger, ForeignKey, DateTime, func
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Text, Integer, BigInteger, ForeignKey, DateTime, func, TypeDecorator
+from sqlalchemy.dialects.postgresql import UUID, ENUM as PG_ENUM
 from sqlalchemy.orm import relationship
 import uuid
 import enum
@@ -19,6 +18,33 @@ class VideoStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
+class VideoStatusType(TypeDecorator):
+    """Custom type that ensures enum values (not names) are used with PostgreSQL enum"""
+    impl = PG_ENUM
+    cache_ok = True
+    
+    def __init__(self):
+        super().__init__(
+            'uploading', 'processing', 'ready', 'failed', 'rejected',
+            name='video_status',
+            create_type=False
+        )
+    
+    def process_bind_param(self, value, dialect):
+        """Convert enum to its value (string) before binding"""
+        if value is None:
+            return None
+        if isinstance(value, VideoStatus):
+            return value.value
+        return value
+    
+    def process_result_value(self, value, dialect):
+        """Convert database value back to enum"""
+        if value is None:
+            return None
+        return VideoStatus(value)
+
+
 class Video(Base):
     __tablename__ = "videos"
 
@@ -26,7 +52,7 @@ class Video(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(255))
     description = Column(Text)
-    status = Column(SQLEnum(VideoStatus, native_enum=False), default=VideoStatus.UPLOADING, index=True)
+    status = Column(VideoStatusType(), default=VideoStatus.UPLOADING, index=True)
     url_hls = Column(Text)
     url_mp4 = Column(Text)
     thumbnail = Column(Text)

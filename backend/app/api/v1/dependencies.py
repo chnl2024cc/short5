@@ -19,25 +19,46 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
     """Get current authenticated user (optional)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if not credentials:
+        logger.warning("No credentials provided in request - HTTPBearer returned None")
         return None
     
     token = credentials.credentials
+    logger.info(f"Received token: {token[:30]}... (length: {len(token)})")
+    
     payload = decode_token(token)
     
-    if payload is None or payload.get("type") != "access":
+    if payload is None:
+        logger.warning(f"Token decode failed for token: {token[:30]}...")
+        return None
+    
+    logger.info(f"Token decoded successfully. Payload keys: {list(payload.keys())}, type: {payload.get('type')}")
+    
+    if payload.get("type") != "access":
+        logger.warning(f"Token type mismatch. Expected 'access', got: {payload.get('type')}")
         return None
     
     user_id = payload.get("sub")
     if not user_id:
+        logger.warning("No user_id in token payload")
         return None
     
+    logger.info(f"Looking up user with ID: {user_id}")
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     
-    if user is None or not user.is_active:
+    if user is None:
+        logger.warning(f"User not found for user_id: {user_id}")
         return None
     
+    if not user.is_active:
+        logger.warning(f"User {user_id} is inactive")
+        return None
+    
+    logger.info(f"User authenticated successfully: {user.username} (ID: {user.id})")
     return user
 
 

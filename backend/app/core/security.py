@@ -78,6 +78,14 @@ def decode_token(token: str) -> Optional[dict]:
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
         )
         return payload
-    except JWTError:
+    except JWTError as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"JWT decode error: {type(e).__name__}: {str(e)}")
+        return None
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Unexpected error decoding token: {type(e).__name__}: {str(e)}")
         return None
 

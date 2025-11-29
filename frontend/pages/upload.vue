@@ -169,12 +169,21 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useVideosStore } from '~/stores/videos'
+import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({
   middleware: 'auth',
 })
 
 const videosStore = useVideosStore()
+const authStore = useAuthStore()
+
+// Ensure auth store is initialized
+onMounted(() => {
+  if (process.client) {
+    authStore.initFromStorage()
+  }
+})
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const dropZone = ref<HTMLElement | null>(null)
@@ -281,6 +290,21 @@ const handleUpload = async () => {
   
   error.value = null
   success.value = null
+  
+  // Check if user is authenticated
+  if (!authStore.isAuthenticated) {
+    error.value = 'You must be logged in to upload videos. Please log in and try again.'
+    return
+  }
+  
+  // Verify token exists
+  const token = authStore.token || (process.client ? localStorage.getItem('token') : null)
+  if (!token) {
+    error.value = 'Authentication token not found. Please log in again.'
+    navigateTo('/login')
+    return
+  }
+  
   uploading.value = true
   uploadProgress.value = 0
   
