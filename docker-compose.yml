@@ -51,10 +51,6 @@ services:
       JWT_ALGORITHM: HS256
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 30
       JWT_REFRESH_TOKEN_EXPIRE_DAYS: 7
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     ports:
@@ -80,10 +76,6 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-short5_user}:${POSTGRES_PASSWORD:-short5_password}@postgres:5432/${POSTGRES_DB:-short5_db}
       REDIS_URL: redis://redis:6379/0
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     volumes:
@@ -107,10 +99,6 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-short5_user}:${POSTGRES_PASSWORD:-short5_password}@postgres:5432/${POSTGRES_DB:-short5_db}
       REDIS_URL: redis://redis:6379/0
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       C_FORCE_ROOT: "true"  # Allow running as root in container (development)
@@ -132,7 +120,7 @@ services:
     container_name: short5_frontend
     environment:
       NUXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
-      NUXT_PUBLIC_BACKEND_BASE_URL: http://backend:8000  # Use Docker service name for internal communication
+      NUXT_PUBLIC_BACKEND_BASE_URL: http://localhost:8000  # Use localhost for browser access (not Docker internal hostname)
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     volumes:

@@ -1,14 +1,13 @@
 """
 FFmpeg Video Processing Worker
-Processes videos: transcodes to HLS, creates thumbnails, uploads to S3/R2
+Processes videos: transcodes to HLS, creates thumbnails, stores in local Docker volume
 """
 import os
 import subprocess
 import asyncio
 from pathlib import Path
 from typing import Optional
-import boto3
-from botocore.exceptions import ClientError
+# boto3 removed - using local storage only
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from celery import Celery
@@ -67,33 +66,9 @@ else:
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
-# S3/R2 client (only initialize if credentials are provided and valid)
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
-S3_BUCKET = os.getenv("S3_BUCKET_NAME", "").strip()
-
-# Only create S3 client if credentials are available and not empty
-# Check for actual values, not just presence (empty strings from .env count as missing)
-USE_S3 = bool(AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and S3_BUCKET)
-
-if USE_S3:
-    try:
-        s3_client = boto3.client(
-            "s3",
-            endpoint_url=os.getenv("S3_ENDPOINT_URL") or None,
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-            region_name=os.getenv("AWS_REGION", "us-east-1"),
-        )
-        print("✓ S3 client initialized - will use S3/R2 storage")
-    except Exception as e:
-        print(f"⚠ WARNING: Failed to initialize S3 client: {e}")
-        print("  Falling back to local file storage (development mode)")
-        s3_client = None
-        USE_S3 = False
-else:
-    s3_client = None
-    print("📦 S3 credentials not provided - will use local file storage (development mode)")
+# Local storage only - no S3/R2
+# All files stored in /app/uploads/processed/ directory structure
+print("📦 Using local file storage (Docker volume)")
 
 # Processing settings
 TEMP_DIR = Path("/tmp/video_processing")
@@ -335,89 +310,45 @@ def create_thumbnail(input_path: Path, output_path: Path, timestamp: str = "00:0
     subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
 
 
-def upload_to_s3(local_path: Path, s3_key: str):
-    """Upload file to S3/R2, or use local file path in development mode"""
-    # Development mode: if S3 credentials are not configured, use local file paths
-    if not USE_S3 or s3_client is None:
-        print(f"📦 Development mode: Using local file storage for {s3_key}")
-        try:
-            # Return a local file URL that can be served by the backend
-            # Store files in a local directory that the backend can serve
-            local_storage = Path("/app/uploads/processed")
-            local_storage.mkdir(parents=True, exist_ok=True)
-            
-            # Copy file to processed directory
-            # Use a cleaner path structure: preserve directory structure but make it URL-safe
-            safe_key = s3_key.replace("/", "_")
-            dest_path = local_storage / safe_key
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            import shutil
-            shutil.copy2(local_path, dest_path)
-            
-            # Verify file was copied
-            if not dest_path.exists():
-                raise FileNotFoundError(f"Failed to copy file to {dest_path}")
-            
-            # Return a path that backend can serve (backend mounts /uploads)
-            url_path = f"/uploads/processed/{safe_key}"
-            print(f"  ✓ File stored locally: {dest_path} → {url_path}")
-            return url_path
-        except Exception as e:
-            print(f"✗ ERROR in local file storage: {e}")
-            import traceback
-            traceback.print_exc()
-            # Fallback: return path to original file location if copy fails
-            # This is a last resort - should not normally happen
-            print(f"  ⚠ Falling back to original file location")
-            return f"/uploads/{local_path.name}"
+def store_file(local_path: Path, storage_key: str) -> str:
+    """
+    Store file in local storage (Docker volume)
     
-    # Production mode: upload to S3/R2
+    Args:
+        local_path: Path to source file
+        storage_key: Storage path key (e.g., "videos/{video_id}/playlist.m3u8")
+    
+    Returns:
+        URL path that backend can serve (e.g., "/uploads/processed/videos/{video_id}/playlist.m3u8")
+    """
     try:
-        print(f"📦 Production mode: Uploading {s3_key} to S3/R2")
-        s3_client.upload_file(
-            str(local_path),
-            S3_BUCKET,
-            s3_key,
-            ExtraArgs={"ContentType": "application/octet-stream"},
-        )
-        # Use endpoint URL if provided (for Cloudflare R2)
-        if os.getenv("S3_ENDPOINT_URL"):
-            url = f"{os.getenv('S3_ENDPOINT_URL')}/{S3_BUCKET}/{s3_key}"
-        else:
-            url = f"https://{S3_BUCKET}.s3.{os.getenv('AWS_REGION', 'us-east-1')}.amazonaws.com/{s3_key}"
-        print(f"  ✓ Uploaded to S3: {url}")
-        return url
-    except (ClientError, Exception) as e:
-        # If S3 upload fails (invalid credentials, network error, etc.), fall back to local storage
-        print(f"⚠ WARNING: S3 upload failed: {e}")
-        print(f"  Falling back to local file storage for {s3_key}")
+        # Store files in processed directory with preserved structure
+        # IMPORTANT: Preserve directory structure for HLS playlists to work correctly
+        # HLS playlists use relative paths, so we need to maintain the same structure
+        local_storage = Path("/app/uploads/processed")
+        local_storage.mkdir(parents=True, exist_ok=True)
+        
+        # Preserve directory structure from storage key (e.g., videos/video_id/720p/segment.ts)
+        # This ensures HLS playlist relative paths resolve correctly
+        dest_path = local_storage / storage_key
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        import shutil
+        shutil.copy2(local_path, dest_path)
+        
+        # Verify file was copied
+        if not dest_path.exists():
+            raise FileNotFoundError(f"Failed to copy file to {dest_path}")
+        
+        # Return a path that backend can serve (backend mounts /uploads)
+        url_path = f"/uploads/processed/{storage_key}"
+        print(f"  ✓ File stored: {dest_path} → {url_path}")
+        return url_path
+    except Exception as e:
+        print(f"✗ ERROR storing file: {e}")
         import traceback
         traceback.print_exc()
-        
-        # Fall back to local storage
-        try:
-            local_storage = Path("/app/uploads/processed")
-            local_storage.mkdir(parents=True, exist_ok=True)
-            
-            safe_key = s3_key.replace("/", "_")
-            dest_path = local_storage / safe_key
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            import shutil
-            shutil.copy2(local_path, dest_path)
-            
-            if not dest_path.exists():
-                raise FileNotFoundError(f"Failed to copy file to {dest_path}")
-            
-            url_path = f"/uploads/processed/{safe_key}"
-            print(f"  ✓ File stored locally (fallback): {dest_path} → {url_path}")
-            return url_path
-        except Exception as fallback_error:
-            print(f"✗ ERROR in local file storage fallback: {fallback_error}")
-            # Last resort: return path to original file location
-            print(f"  ⚠ Using original file location as last resort")
-            return f"/uploads/{local_path.name}"
+        raise
 
 
 @celery_app.task(name="process_video", bind=True, max_retries=0)
@@ -515,35 +446,35 @@ def process_video(self, video_id: str, file_path: str):
         create_thumbnail(input_path, thumbnail_path)
         print("  ✓ Thumbnail created")
         
-        # Step 4: Upload to S3/R2 (per RFC: Video dann auf CDN ausliefern)
-        print("  → Uploading to storage...")
+        # Step 4: Store processed files in local storage
+        print("  → Storing processed files...")
         try:
-            hls_url = upload_to_s3(hls_playlist, f"videos/{video_id}/playlist.m3u8")
+            hls_url = store_file(hls_playlist, f"videos/{video_id}/playlist.m3u8")
             
-            # Upload HLS segments
+            # Store HLS segments
             segment_count = 0
             for quality in VIDEO_PROFILES.keys():
                 segment_dir = output_dir / quality
                 for segment_file in segment_dir.glob("*.ts"):
-                    s3_key = f"videos/{video_id}/{quality}/{segment_file.name}"
-                    upload_to_s3(segment_file, s3_key)
+                    storage_key = f"videos/{video_id}/{quality}/{segment_file.name}"
+                    store_file(segment_file, storage_key)
                     segment_count += 1
                 
-                # Upload quality playlist
+                # Store quality playlist
                 quality_playlist = segment_dir / f"{video_id}.m3u8"
                 if quality_playlist.exists():
-                    s3_key = f"videos/{video_id}/{quality}/{quality_playlist.name}"
-                    upload_to_s3(quality_playlist, s3_key)
+                    storage_key = f"videos/{video_id}/{quality}/{quality_playlist.name}"
+                    store_file(quality_playlist, storage_key)
             
-            # Upload thumbnail (if it was created successfully)
+            # Store thumbnail (if it was created successfully)
             thumbnail_url = None
             if thumbnail_path and thumbnail_path.exists():
-                thumbnail_url = upload_to_s3(thumbnail_path, f"videos/{video_id}/thumbnail.jpg")
-            print(f"  ✓ Upload complete ({segment_count} segments + playlists" + (f" + thumbnail" if thumbnail_url else "") + ")")
+                thumbnail_url = store_file(thumbnail_path, f"videos/{video_id}/thumbnail.jpg")
+            print(f"  ✓ Storage complete ({segment_count} segments + playlists" + (f" + thumbnail" if thumbnail_url else "") + ")")
         except Exception as e:
             error_category = "STORAGE_ERROR"
             user_friendly_error = "Failed to store processed video files."
-            print(f"✗ ERROR during upload: {e}")
+            print(f"✗ ERROR during storage: {e}")
             import traceback
             traceback.print_exc()
             raise

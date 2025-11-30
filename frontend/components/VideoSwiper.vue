@@ -101,6 +101,24 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import type { Video } from '~/types/video'
 
+const config = useRuntimeConfig()
+const backendBaseUrl = config.public.backendBaseUrl || 'http://localhost:8000'
+
+// Helper to convert relative URLs to absolute URLs
+const getAbsoluteUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null
+  // If already absolute (starts with http:// or https://), return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // If relative (starts with /), prepend backend base URL
+  if (url.startsWith('/')) {
+    return `${backendBaseUrl}${url}`
+  }
+  // Otherwise, assume it's relative to backend
+  return `${backendBaseUrl}/${url}`
+}
+
 // Lazy load hls.js - using function to prevent Vite from analyzing at build time
 let hlsModule: any = null
 let hlsLoaded = false
@@ -312,7 +330,12 @@ const initializeVideo = async (retry = false) => {
   try {
     // Handle HLS playback
     if (props.video.url_hls) {
-      const hlsSrc = props.video.url_hls
+      const hlsSrc = getAbsoluteUrl(props.video.url_hls)
+      if (!hlsSrc) {
+        throw new Error('HLS URL is invalid')
+      }
+      
+      console.log(`[VideoSwiper] Loading HLS from: ${hlsSrc}`)
       
       // Check if browser supports native HLS (Safari)
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -373,8 +396,10 @@ const initializeVideo = async (retry = false) => {
         } else {
           console.warn('HLS.js not available or not supported, falling back to MP4')
           // Fallback to MP4 if available
-          if (props.video.url_mp4) {
-            video.src = props.video.url_mp4
+          const mp4Src = getAbsoluteUrl(props.video.url_mp4)
+          if (mp4Src) {
+            console.log(`[VideoSwiper] Falling back to MP4: ${mp4Src}`)
+            video.src = mp4Src
             video.load()
             video.addEventListener('error', handleNativeVideoError, { once: true })
           } else {
@@ -384,7 +409,12 @@ const initializeVideo = async (retry = false) => {
       }
     } else if (props.video.url_mp4) {
       // Direct MP4 playback (no HLS)
-      video.src = props.video.url_mp4
+      const mp4Src = getAbsoluteUrl(props.video.url_mp4)
+      if (!mp4Src) {
+        throw new Error('MP4 URL is invalid')
+      }
+      console.log(`[VideoSwiper] Loading MP4: ${mp4Src}`)
+      video.src = mp4Src
       video.load()
       video.addEventListener('error', handleNativeVideoError, { once: true })
     } else {

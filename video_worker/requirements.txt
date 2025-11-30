@@ -3,8 +3,8 @@ celery==5.3.4
 redis==5.0.1
 sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
-boto3==1.34.0
 python-dotenv==1.0.0
+# boto3 removed - using local Docker volume storage only
 
 # Video processing (if needed)
 # opencv-python-headless==4.8.1.78  # Optional for advanced processing
