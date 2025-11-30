@@ -288,9 +288,31 @@ def transcode_to_hls(input_path: Path, output_dir: Path, video_id: str):
                 print(f"    FFmpeg warning/error for {quality}: {result.stderr[:200]}")
     
     # Create master playlist
+    # HLS master playlist format: BANDWIDTH must be in bits per second (integer)
+    # BANDWIDTH should include both video and audio bitrates
+    def parse_bitrate(bitrate_str: str) -> int:
+        """Convert bitrate string (e.g., '2500k') to bits per second (integer)"""
+        if bitrate_str.endswith('k'):
+            return int(float(bitrate_str[:-1]) * 1000)  # Convert kbps to bps
+        elif bitrate_str.endswith('M'):
+            return int(float(bitrate_str[:-1]) * 1000000)  # Convert Mbps to bps
+        else:
+            # Assume it's already in bps
+            return int(bitrate_str)
+    
     master_playlist_content = "#EXTM3U\n"
     for quality in VIDEO_PROFILES.keys():
-        master_playlist_content += f'#EXT-X-STREAM-INF:BANDWIDTH={VIDEO_PROFILES[quality]["bitrate"]}\n'
+        profile = VIDEO_PROFILES[quality]
+        # Calculate total bandwidth (video + audio)
+        video_bw = parse_bitrate(profile["bitrate"])
+        audio_bw = parse_bitrate(profile["audio_bitrate"])
+        total_bandwidth = video_bw + audio_bw
+        
+        # Include RESOLUTION for better compatibility
+        resolution = profile["resolution"]
+        
+        # Create EXT-X-STREAM-INF tag with BANDWIDTH and RESOLUTION
+        master_playlist_content += f'#EXT-X-STREAM-INF:BANDWIDTH={total_bandwidth},RESOLUTION={resolution}\n'
         master_playlist_content += f"{quality}/{video_id}.m3u8\n"
     
     hls_playlist.write_text(master_playlist_content)

@@ -42,7 +42,7 @@
     <div
       v-if="video.thumbnail && (isLoading || hasError)"
       class="absolute inset-0 bg-cover bg-center"
-      :style="{ backgroundImage: `url(${video.thumbnail})` }"
+      :style="{ backgroundImage: `url(${getAbsoluteUrl(video.thumbnail) || ''})` }"
     >
       <div class="absolute inset-0 bg-black/40"></div>
     </div>
@@ -340,6 +340,7 @@ const initializeVideo = async (retry = false) => {
       // Check if browser supports native HLS (Safari)
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         // Native HLS support (Safari)
+        console.log(`[VideoSwiper] Using native HLS support (Safari)`)
         video.src = hlsSrc
         video.load()
         
@@ -351,6 +352,7 @@ const initializeVideo = async (retry = false) => {
         
         if (Hls && Hls.isSupported()) {
           // Use hls.js for browsers with MSE support
+          console.log(`[VideoSwiper] Using HLS.js for playback`)
           hlsInstance = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
@@ -371,7 +373,13 @@ const initializeVideo = async (retry = false) => {
         hlsInstance.loadSource(hlsSrc)
         hlsInstance.attachMedia(video)
         
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Log when manifest is loaded (master or media playlist)
+        hlsInstance.on(Hls.Events.MANIFEST_LOADED, (event: any, data: any) => {
+          console.log(`[VideoSwiper] HLS manifest loaded:`, data)
+        })
+        
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, (event: any, data: any) => {
+          console.log(`[VideoSwiper] HLS manifest parsed. Levels:`, data.levels?.length || 0)
           isLoading.value = false
           if (props.isActive) {
             video.play().catch((err) => {
@@ -382,6 +390,26 @@ const initializeVideo = async (retry = false) => {
         })
         
         hlsInstance.on(Hls.Events.ERROR, (event: any, data: any) => {
+          console.error(`[VideoSwiper] HLS error:`, {
+            type: data.type,
+            details: data.details,
+            fatal: data.fatal,
+            error: data.error,
+            url: data.url,
+            response: data.response
+          })
+          
+          // Check for manifest parsing errors (common when master playlist has wrong format)
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            if (data.details === 'manifestLoadError' || data.details === 1) {
+              console.error(`[VideoSwiper] Failed to load manifest from: ${hlsSrc}`)
+            } else if (data.details === 'manifestParsingError' || data.details === 2) {
+              console.error(`[VideoSwiper] Failed to parse manifest. This usually means the master playlist has invalid format.`)
+              console.error(`[VideoSwiper] Check if BANDWIDTH is an integer (e.g., 2628000) not a string (e.g., "2500k")`)
+              console.error(`[VideoSwiper] Run: docker-compose exec backend python /app/scripts/fix_master_playlists.py`)
+            }
+          }
+          
           handleHlsError(data)
         })
         

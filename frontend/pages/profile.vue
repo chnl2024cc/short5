@@ -239,7 +239,7 @@
               <div class="relative aspect-[9/16] bg-gray-800">
                 <img
                   v-if="video.thumbnail"
-                  :src="video.thumbnail"
+                  :src="getAbsoluteUrl(video.thumbnail) || ''"
                   :alt="video.title || 'Video thumbnail'"
                   class="w-full h-full object-cover"
                 />
@@ -353,6 +353,24 @@ definePageMeta({
 
 const authStore = useAuthStore()
 const api = useApi()
+
+// Helper to convert relative URLs to absolute URLs
+const config = useRuntimeConfig()
+const backendBaseUrl = config.public.backendBaseUrl || 'http://localhost:8000'
+
+const getAbsoluteUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null
+  // If already absolute (starts with http:// or https://), return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // If relative (starts with /), prepend backend base URL
+  if (url.startsWith('/')) {
+    return `${backendBaseUrl}${url}`
+  }
+  // Otherwise, assume it's relative to backend
+  return `${backendBaseUrl}/${url}`
+}
 
 // Profile data using useAsyncData (Nuxt best practice)
 const {
