@@ -29,21 +29,14 @@ export const useSwipeHint = () => {
 
   /**
    * Show the hint if it hasn't been dismissed
-   * Auto-dismisses after 5 seconds if user doesn't interact
+   * The hint will stay visible until the user swipes (calls dismissSwipeHint)
    */
-  const showHint = (delay: number = 0, autoDismissDelay: number = 5000) => {
+  const showHint = (delay: number = 0) => {
     if (!checkSwipeHint() || showSwipeHint.value) return
 
     const show = () => {
       showSwipeHint.value = true
-      // Auto-dismiss after specified delay if user doesn't interact
-      if (autoDismissDelay > 0) {
-        setTimeout(() => {
-          if (showSwipeHint.value) {
-            dismissSwipeHint()
-          }
-        }, autoDismissDelay)
-      }
+      // Hint stays visible until user swipes (no auto-dismiss)
     }
 
     if (delay > 0) {

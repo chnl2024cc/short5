@@ -289,8 +289,8 @@ const ensureTargetVideoActive = async () => {
 watch(() => videos.value.length, (newLength) => {
   if (newLength > 0) {
     // Show hint after a short delay to let video start playing
-    // Auto-dismisses after 5 seconds if user doesn't interact
-    showHint(1000, 5000)
+    // Hint stays visible until user swipes for the first time
+    showHint(1000)
   }
 }, { immediate: true })
 

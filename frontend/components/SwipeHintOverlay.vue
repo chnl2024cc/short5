@@ -3,7 +3,6 @@
     <div
       v-if="show"
       class="swipe-hint-overlay"
-      @click="handleDismiss"
     >
       <div class="swipe-hint-container">
         <!-- Left Swipe Hint -->
@@ -74,6 +73,7 @@ const handleDismiss = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none; /* Allow touches to pass through to swiper */
 }
 
 .swipe-hint-container {
