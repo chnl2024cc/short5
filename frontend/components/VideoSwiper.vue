@@ -161,6 +161,7 @@ const emit = defineEmits<{
   swiped: [direction: 'like' | 'not_like']
   viewUpdate: [seconds: number]
   error: [error: Error]
+  videoStarted: []
 }>()
 
 const videosStore = useVideosStore()
@@ -500,6 +501,10 @@ const onVideoPlaying = () => {
   if (bufferingTimeout) {
     clearTimeout(bufferingTimeout)
     bufferingTimeout = null
+  }
+  // Emit event when video starts playing (only for active video)
+  if (props.isActive) {
+    emit('videoStarted')
   }
 }
 

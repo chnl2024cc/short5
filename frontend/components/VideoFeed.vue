@@ -55,6 +55,7 @@
         @swiped="handleSwipe"
         @view-update="handleViewUpdate"
         @error="handleVideoError"
+        @video-started="handleVideoStarted"
       />
       
       <!-- Swipe Hint Overlay - Shows on first visit -->
@@ -93,7 +94,7 @@ const searchAttempts = ref(0)
 const maxSearchAttempts = 10 // Maximum number of feed loads to search for target video
 
 // Swipe hint management
-const { showSwipeHint, dismissSwipeHint, showHint } = useSwipeHint()
+const { showSwipeHint, dismissSwipeHint, showHint, checkSwipeHint } = useSwipeHint()
 
 const visibleVideos = computed(() => {
   // Show current video + next preloadCount videos
@@ -285,14 +286,23 @@ const ensureTargetVideoActive = async () => {
   }
 }
 
-// Watch for videos to be loaded, then show hint if needed
-watch(() => videos.value.length, (newLength) => {
-  if (newLength > 0) {
-    // Show hint after a short delay to let video start playing
-    // Hint stays visible until user swipes for the first time
-    showHint(1000)
+// Track if we've shown the hint for the current video
+const videoStartedForHint = ref(false)
+
+// Handle when video starts playing - show hint 5 seconds later
+const handleVideoStarted = () => {
+  // Only show hint once per video session
+  if (!videoStartedForHint.value && checkSwipeHint()) {
+    videoStartedForHint.value = true
+    // Show hint 5 seconds after video starts playing
+    showHint(5000)
   }
-}, { immediate: true })
+}
+
+// Reset video started flag when video changes
+watch(() => currentIndex.value, () => {
+  videoStartedForHint.value = false
+})
 
 onMounted(async () => {
   // Check if there's a video query parameter

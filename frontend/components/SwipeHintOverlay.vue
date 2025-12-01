@@ -5,33 +5,46 @@
       class="swipe-hint-overlay"
     >
       <div class="swipe-hint-container">
-        <!-- Left Swipe Hint -->
-        <div class="swipe-hint-left">
-          <div class="swipe-hint-icon">
-            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </div>
-          <div class="swipe-hint-text">Swipe Left</div>
-          <div class="swipe-hint-label">Not Like</div>
-        </div>
-        
-        <!-- Center Instructions -->
+        <!-- Center Main Message -->
         <div class="swipe-hint-center">
-          <div class="swipe-hint-arrow-left">←</div>
           <div class="swipe-hint-main-text">Swipe to navigate</div>
-          <div class="swipe-hint-arrow-right">→</div>
+          <div class="swipe-hint-arrows">
+            <div class="swipe-hint-arrow swipe-hint-arrow-left">
+              <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+              </svg>
+              <span class="arrow-label">Pass</span>
+            </div>
+            <div class="swipe-hint-arrow swipe-hint-arrow-right">
+              <span class="arrow-label">Like</span>
+              <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
         </div>
         
-        <!-- Right Swipe Hint -->
-        <div class="swipe-hint-right">
-          <div class="swipe-hint-icon">
-            <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-            </svg>
+        <!-- Action Cards -->
+        <div class="swipe-hint-actions">
+          <!-- Left Action Card -->
+          <div class="swipe-hint-card swipe-hint-card-left">
+            <div class="card-icon-wrapper">
+              <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <div class="card-text">Swipe Left</div>
           </div>
-          <div class="swipe-hint-text">Swipe Right</div>
-          <div class="swipe-hint-label">Like</div>
+          
+          <!-- Right Action Card -->
+          <div class="swipe-hint-card swipe-hint-card-right">
+            <div class="card-icon-wrapper">
+              <svg class="card-icon" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+              </svg>
+            </div>
+            <div class="card-text">Swipe Right</div>
+          </div>
         </div>
         
         <!-- Dismiss Button -->
@@ -40,8 +53,8 @@
           class="swipe-hint-dismiss"
           aria-label="Dismiss hint"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          <svg class="dismiss-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
@@ -73,113 +86,81 @@ const handleDismiss = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1.5rem;
   pointer-events: none; /* Allow touches to pass through to swiper */
 }
 
 .swipe-hint-container {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 3rem;
-  padding: 2rem;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(10px);
+  gap: 1.5rem;
+  padding: 2rem 1.5rem;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(20, 20, 30, 0.9) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-radius: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  animation: fadeInScale 0.4s ease-out;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  animation: fadeInScale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: auto;
-  max-width: 90%;
+  max-width: 100%;
+  width: 100%;
 }
 
 @keyframes fadeInScale {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.85) translateY(20px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 
-.swipe-hint-left,
-.swipe-hint-right {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.swipe-hint-left {
-  animation-delay: 0s;
-}
-
-.swipe-hint-right {
-  animation-delay: 0.5s;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.8;
-  }
-}
-
-.swipe-hint-icon {
-  color: white;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
-}
-
-.swipe-hint-left .swipe-hint-icon {
-  color: #ef4444; /* Red for not like */
-}
-
-.swipe-hint-right .swipe-hint-icon {
-  color: #3b82f6; /* Blue for like */
-}
-
-.swipe-hint-text {
-  color: white;
-  font-weight: 600;
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.swipe-hint-label {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
+/* Center Section */
 .swipe-hint-center {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  min-width: 200px;
+  gap: 1.25rem;
+  width: 100%;
 }
 
-.swipe-hint-arrow-left,
-.swipe-hint-arrow-right {
-  font-size: 2rem;
-  color: rgba(255, 255, 255, 0.6);
-  animation: slideHorizontal 1.5s ease-in-out infinite;
+.swipe-hint-main-text {
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.swipe-hint-arrows {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  width: 100%;
+}
+
+.swipe-hint-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 120px;
 }
 
 .swipe-hint-arrow-left {
-  animation-name: slideLeft;
+  animation: slideLeft 2s ease-in-out infinite;
 }
 
 .swipe-hint-arrow-right {
-  animation-name: slideRight;
+  animation: slideRight 2s ease-in-out infinite;
 }
 
 @keyframes slideLeft {
@@ -187,7 +168,7 @@ const handleDismiss = () => {
     transform: translateX(0);
   }
   50% {
-    transform: translateX(-10px);
+    transform: translateX(-8px);
   }
 }
 
@@ -196,79 +177,250 @@ const handleDismiss = () => {
     transform: translateX(0);
   }
   50% {
-    transform: translateX(10px);
+    transform: translateX(8px);
   }
 }
 
-.swipe-hint-main-text {
-  color: white;
-  font-size: 1rem;
-  font-weight: 500;
-  text-align: center;
+.arrow-icon {
+  width: 2rem;
+  height: 2rem;
+  color: rgba(255, 255, 255, 0.7);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
-.swipe-hint-dismiss {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  width: 2.5rem;
-  height: 2.5rem;
+.arrow-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Action Cards */
+.swipe-hint-actions {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.swipe-hint-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  animation: cardPulse 2.5s ease-in-out infinite;
+  max-width: 140px;
+}
+
+.swipe-hint-card-left {
+  animation-delay: 0s;
+}
+
+.swipe-hint-card-left:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: scale(1.05);
+}
+
+.swipe-hint-card-right {
+  animation-delay: 0.3s;
+}
+
+.swipe-hint-card-right:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: scale(1.05);
+}
+
+@keyframes cardPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 0.9;
+  }
+}
+
+.card-icon-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.swipe-hint-card-left .card-icon-wrapper {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.15) 100%);
+}
+
+.swipe-hint-card-right .card-icon-wrapper {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%);
+}
+
+.card-icon {
+  width: 2rem;
+  height: 2rem;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+}
+
+.swipe-hint-card-left .card-icon {
+  color: #f87171; /* Lighter red */
+}
+
+.swipe-hint-card-right .card-icon {
+  color: #60a5fa; /* Lighter blue */
+}
+
+.card-text {
   color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Dismiss Button */
+.swipe-hint-dismiss {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   transition: all 0.2s ease;
   pointer-events: auto;
+  backdrop-filter: blur(10px);
 }
 
-.swipe-hint-dismiss:hover {
+.swipe-hint-dismiss:active {
   background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.1);
+  transform: scale(0.95);
 }
 
-/* Responsive design for mobile */
-@media (max-width: 768px) {
+.dismiss-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 480px) {
+  .swipe-hint-overlay {
+    padding: 1rem;
+  }
+
   .swipe-hint-container {
-    flex-direction: column;
+    padding: 1.75rem 1.25rem;
+    gap: 1.25rem;
+    border-radius: 1.5rem;
+  }
+
+  .swipe-hint-main-text {
+    font-size: 1rem;
+  }
+
+  .swipe-hint-arrows {
     gap: 1.5rem;
-    padding: 1.5rem;
-    max-width: 95%;
   }
-  
-  .swipe-hint-center {
-    order: -1;
-    min-width: auto;
+
+  .arrow-icon {
+    width: 1.75rem;
+    height: 1.75rem;
   }
-  
-  .swipe-hint-left,
-  .swipe-hint-right {
-    flex-direction: row;
-    gap: 1rem;
+
+  .arrow-label {
+    font-size: 0.8125rem;
   }
-  
-  .swipe-hint-icon {
-    width: 2rem;
-    height: 2rem;
+
+  .swipe-hint-actions {
+    gap: 0.75rem;
   }
-  
-  .swipe-hint-arrow-left,
-  .swipe-hint-arrow-right {
-    font-size: 1.5rem;
+
+  .swipe-hint-card {
+    padding: 1rem 0.75rem;
+    gap: 0.625rem;
+    max-width: 120px;
+  }
+
+  .card-icon-wrapper {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .card-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .card-text {
+    font-size: 0.8125rem;
+  }
+
+  .swipe-hint-dismiss {
+    width: 2.5rem;
+    height: 2.5rem;
+    top: 0.625rem;
+    right: 0.625rem;
+  }
+
+  .dismiss-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  .swipe-hint-container {
+    padding: 1.5rem 1rem;
+  }
+
+  .swipe-hint-card {
+    max-width: 100px;
+    padding: 0.875rem 0.5rem;
+  }
+
+  .card-icon-wrapper {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .card-icon {
+    width: 1.5rem;
+    height: 1.5rem;
   }
 }
 
 /* Transition animations */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+  transform: scale(0.9) translateY(10px);
 }
 </style>
