@@ -56,6 +56,12 @@
         @view-update="handleViewUpdate"
         @error="handleVideoError"
       />
+      
+      <!-- Swipe Hint Overlay - Shows on first visit -->
+      <SwipeHintOverlay
+        :show="showSwipeHint"
+        @dismiss="dismissSwipeHint"
+      />
     </div>
   </div>
 </template>
@@ -65,7 +71,9 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
+import { useSwipeHint } from '~/composables/useSwipeHint'
 import type { Video, FeedResponse } from '~/types/video'
+import SwipeHintOverlay from './SwipeHintOverlay.vue'
 
 const route = useRoute()
 const videosStore = useVideosStore()
@@ -83,6 +91,9 @@ const preloadCount = 2 // Preload next 2 videos
 const targetVideoId = ref<string | null>(null)
 const searchAttempts = ref(0)
 const maxSearchAttempts = 10 // Maximum number of feed loads to search for target video
+
+// Swipe hint management
+const { showSwipeHint, dismissSwipeHint, showHint } = useSwipeHint()
 
 const visibleVideos = computed(() => {
   // Show current video + next preloadCount videos
@@ -198,6 +209,10 @@ const loadFeed = async (cursor?: string) => {
 }
 
 const handleSwipe = async (direction: 'like' | 'not_like') => {
+  // Auto-dismiss hint on first swipe
+  if (showSwipeHint.value) {
+    dismissSwipeHint()
+  }
   const currentVideo = videos.value[currentIndex.value]
   if (!currentVideo) return
   
@@ -270,7 +285,15 @@ const ensureTargetVideoActive = async () => {
   }
 }
 
-// Load feed on mount
+// Watch for videos to be loaded, then show hint if needed
+watch(() => videos.value.length, (newLength) => {
+  if (newLength > 0) {
+    // Show hint after a short delay to let video start playing
+    // Auto-dismisses after 5 seconds if user doesn't interact
+    showHint(1000, 5000)
+  }
+}, { immediate: true })
+
 onMounted(async () => {
   // Check if there's a video query parameter
   const videoId = route.query.video as string | undefined
@@ -317,13 +340,17 @@ watch(
 </script>
 
 <style scoped>
-@reference "tailwindcss";
-
 .feed-container {
-  @apply relative w-full h-screen overflow-hidden bg-black;
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background-color: black;
 }
 
 .feed-container video {
-  @apply w-full h-full object-contain;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 </style>
