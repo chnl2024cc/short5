@@ -5,8 +5,8 @@
       <div class="flex items-center justify-between">
         <h1 class="text-xl font-bold text-white">Short-Video</h1>
         <div class="flex items-center gap-4">
+          <!-- Liked Videos Link - Available for everyone (authenticated users see server-side, unauthenticated see localStorage) -->
           <NuxtLink
-            v-if="authStore.isAuthenticated"
             to="/liked"
             class="text-white hover:text-blue-400 transition-colors"
             title="Liked Videos"

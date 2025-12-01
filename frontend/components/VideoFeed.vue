@@ -9,9 +9,36 @@
     
     <div
       v-else-if="videos.length === 0"
-      class="flex items-center justify-center h-screen"
+      class="flex flex-col items-center justify-center h-screen px-4"
     >
-      <div class="text-white text-xl">No videos available</div>
+      <div class="text-center max-w-md">
+        <div class="text-6xl mb-4">📹</div>
+        <h2 class="text-2xl font-bold text-white mb-2">No videos available</h2>
+        <p class="text-gray-400 mb-6">
+          The feed is empty. Try refreshing or check back later for new content.
+        </p>
+        <div class="flex flex-col gap-3 items-center">
+          <button
+            @click="loadFeed()"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto"
+          >
+            🔄 Refresh Feed
+          </button>
+          <NuxtLink
+            to="/liked"
+            class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto text-center"
+          >
+            ❤️ View Liked Videos
+          </NuxtLink>
+          <NuxtLink
+            v-if="isAuthenticated"
+            to="/upload"
+            class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto text-center"
+          >
+            ➕ Upload Video
+          </NuxtLink>
+        </div>
+      </div>
     </div>
     
     <div
@@ -36,12 +63,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useVideosStore } from '~/stores/videos'
+import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
 import type { Video, FeedResponse } from '~/types/video'
 
 const route = useRoute()
 const videosStore = useVideosStore()
+const authStore = useAuthStore()
 const api = useApi()
+
+const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 const videos = ref<Video[]>([])
 const currentIndex = ref(0)
