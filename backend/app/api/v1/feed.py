@@ -7,6 +7,7 @@ from sqlalchemy import select, func, and_, or_, desc, cast, String
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+import logging
 
 from app.core.database import get_db
 from app.api.v1.dependencies import get_current_user
@@ -17,6 +18,7 @@ from app.models.view import View
 from app.schemas.feed import FeedResponse
 from app.schemas.video import VideoResponse, VideoStats, UserBasic
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -50,7 +52,7 @@ async def calculate_video_score(
         score = 0.3 + (popularity * 0.7)
         
         # Recency boost
-        days_old = (datetime.utcnow() - video.created_at).days
+        days_old = (datetime.now(timezone.utc) - video.created_at).days
         recency = max(0, 1.0 - (days_old / 30))
         score += recency * 0.2
         
@@ -137,6 +139,9 @@ async def get_feed(
 ):
     """Get personalized video feed"""
     try:
+        is_authenticated = current_user is not None
+        logger.info(f"[FEED] Getting feed for {'authenticated' if is_authenticated else 'unauthenticated'} user")
+        
         # Base query: only ready videos with MP4 files
         query = (
             select(Video, User)
@@ -148,17 +153,23 @@ async def get_feed(
             )
         )
         
-        # Exclude videos user has already voted on
+        # Exclude videos user has "liked" (they can see these in the "liked" page)
+        # But still show videos they've "not_liked" (in case they want to see them again)
         if current_user:
             try:
-                voted_videos = await db.execute(
-                    select(Vote.video_id).where(Vote.user_id == current_user.id)
+                liked_videos = await db.execute(
+                    select(Vote.video_id).where(
+                        Vote.user_id == current_user.id,
+                        cast(Vote.direction, String) == "like"
+                    )
                 )
-                voted_video_ids = [row[0] for row in voted_videos.all()]
-                if voted_video_ids:
-                    query = query.where(Video.id.notin_(voted_video_ids))
+                liked_video_ids = [row[0] for row in liked_videos.all()]
+                if liked_video_ids:
+                    query = query.where(Video.id.notin_(liked_video_ids))
+                    logger.info(f"[FEED] Excluding {len(liked_video_ids)} liked videos for authenticated user")
             except Exception as e:
                 # If vote table doesn't exist or has issues, continue without filtering
+                logger.warning(f"[FEED] Error filtering liked videos: {e}")
                 pass
         
         # Apply cursor pagination
@@ -166,29 +177,41 @@ async def get_feed(
             try:
                 cursor_time = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
                 query = query.where(Video.created_at < cursor_time)
-            except Exception:
+                logger.info(f"[FEED] Applying cursor pagination: {cursor_time}")
+            except Exception as e:
+                logger.warning(f"[FEED] Error parsing cursor: {e}")
                 pass
         
         # Get all candidates
+        logger.info(f"[FEED] Executing query with limit {limit * 3}")
         result = await db.execute(query.order_by(desc(Video.created_at)).limit(limit * 3))
         candidates = result.all()
+        logger.info(f"[FEED] Found {len(candidates)} candidate videos")
         
         if not candidates:
+            logger.warning(f"[FEED] No candidate videos found - returning empty feed")
             return FeedResponse(videos=[], next_cursor=None, has_more=False)
         
         # Calculate scores and sort
         scored_videos = []
         user_id = str(current_user.id) if current_user else None
+        logger.info(f"[FEED] Calculating scores for {len(candidates)} videos (user_id: {user_id})")
         
+        scoring_errors = 0
         for video, user in candidates:
             try:
                 score = await calculate_video_score(video, user_id, db)
                 scored_videos.append((score, video, user))
             except Exception as e:
                 # Skip videos that cause errors in scoring
+                scoring_errors += 1
+                logger.warning(f"[FEED] Error scoring video {video.id}: {e}")
                 continue
         
+        logger.info(f"[FEED] Successfully scored {len(scored_videos)} videos ({scoring_errors} errors)")
+        
         if not scored_videos:
+            logger.warning(f"[FEED] No videos after scoring - returning empty feed")
             return FeedResponse(videos=[], next_cursor=None, has_more=False)
         
         # Sort by score (descending)
@@ -247,7 +270,6 @@ async def get_feed(
         )
     except Exception as e:
         # Log the error and return empty feed
-        import logging
-        logging.error(f"Error in get_feed: {str(e)}", exc_info=True)
+        logger.error(f"[FEED] Error in get_feed: {str(e)}", exc_info=True)
         return FeedResponse(videos=[], next_cursor=None, has_more=False)
 
