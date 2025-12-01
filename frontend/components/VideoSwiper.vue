@@ -86,7 +86,9 @@
     
     <!-- Video Info Overlay -->
     <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent text-white z-30">
-      <h3 class="font-bold text-lg">{{ video.title || 'Untitled' }}</h3>
+      <h3 v-if="video.title && video.title.trim() !== '' && video.title.toLowerCase() !== 'untitled'" class="font-bold text-lg">
+        {{ video.title }}
+      </h3>
       <p class="text-sm">{{ video.user?.username }}</p>
       <div class="flex gap-4 mt-2 text-sm">
         <span>❤️ {{ video.stats?.likes || 0 }}</span>
