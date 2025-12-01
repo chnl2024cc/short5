@@ -63,6 +63,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      video_worker:
+        condition: service_healthy  # Wait for video worker to be ready
     networks:
       - short5_network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -87,7 +89,8 @@ services:
       - backend
     networks:
       - short5_network
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+    # Use a different queue to avoid conflicts with video_worker
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2 -Q default
 
   # FFmpeg Video Worker
   video_worker:
@@ -106,11 +109,20 @@ services:
       - video_worker_temp:/tmp/video_processing
       - backend_uploads:/app/uploads
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - short5_network
     command: celery -A worker worker --loglevel=info --concurrency=2 -Q celery
+    healthcheck:
+      # Check if worker process is running and can respond to control commands
+      test: ["CMD-SHELL", "celery -A worker inspect ping | grep -q pong || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s  # Give worker time to start and register tasks
 
   # Celery Flower - Monitoring and Administration
   flower:
@@ -130,7 +142,9 @@ services:
       - video_worker
     networks:
       - short5_network
-    command: celery -A app.celery_app flower --port=5555 --broker=redis://redis:6379/0
+    # Use broker URL directly - Flower will discover all workers connected to the broker
+    # Note: Flower monitors all workers on the broker, not just one app
+    command: celery -A app.celery_app flower --port=5555 --broker=redis://redis:6379/0 --address=0.0.0.0
 
   # Nuxt Frontend (Development)
   frontend:

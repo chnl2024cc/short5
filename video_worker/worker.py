@@ -45,6 +45,8 @@ celery_app.conf.update(
         "worker.process_video": {"queue": "celery"},
         "short_video_platform.process_video": {"queue": "celery"},  # Accept from backend app
     },
+    # Don't reject tasks on worker lost
+    task_reject_on_worker_lost=False,
 )
 
 # Explicitly register the task (no autodiscover needed for single file)
@@ -337,6 +339,7 @@ def store_file(local_path: Path, storage_key: str) -> str:
         raise
 
 
+# Register the task with multiple names to handle cross-app task sending
 @celery_app.task(name="process_video", bind=True, max_retries=0)
 def process_video(self, video_id: str, file_path: str):
     """
@@ -534,6 +537,25 @@ def process_video(self, video_id: str, file_path: str):
 # Make celery_app available for Celery CLI
 # When running: celery -A worker worker
 # Celery will import this module and use celery_app
+
+# Register task with additional names to handle cross-app communication
+# This allows the task to be called with different name formats
+# Note: When tasks are sent from another Celery app, they may be prefixed with the app name
+try:
+    # Get the registered task object
+    process_video_task = celery_app.tasks.get("process_video")
+    if process_video_task:
+        # Register additional names that might be used when sending from other apps
+        # The backend app is "short_video_platform", so it might send "short_video_platform.process_video"
+        celery_app.tasks.register(process_video_task, name="worker.process_video")
+        celery_app.tasks.register(process_video_task, name="short_video_platform.process_video")
+        print(f"✓ Registered task aliases: worker.process_video, short_video_platform.process_video")
+    else:
+        print(f"⚠ Task 'process_video' not found in registered tasks")
+except Exception as e:
+    print(f"⚠ Could not register task aliases: {e}")
+    import traceback
+    traceback.print_exc()
 
 # Print startup information when module is imported
 # This will run when Celery worker starts and imports this module

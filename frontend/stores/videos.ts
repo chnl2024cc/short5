@@ -151,6 +151,23 @@ export const useVideosStore = defineStore('videos', {
     },
 
     async uploadVideo(file: File, title?: string, description?: string) {
+      const authStore = useAuthStore()
+      
+      // Ensure auth store is initialized
+      if (process.client && !authStore.token) {
+        authStore.initFromStorage()
+      }
+      
+      // Verify authentication before upload
+      if (!authStore.isAuthenticated) {
+        const token = process.client ? localStorage.getItem('token') : null
+        if (!token) {
+          throw new Error('You must be logged in to upload videos. Please log in and try again.')
+        }
+        // Update store with token from localStorage
+        authStore.token = token
+      }
+      
       const api = useApi()
       try {
         const formData = new FormData()

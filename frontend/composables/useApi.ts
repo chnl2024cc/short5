@@ -13,7 +13,8 @@ export const useApi = () => {
     const authStore = useAuthStore()
     
     // Ensure auth store is initialized from localStorage (client-side only)
-    if (import.meta.client && !authStore.token) {
+    // Always initialize from storage to ensure we have the latest token
+    if (import.meta.client) {
       authStore.initFromStorage()
     }
     
@@ -25,6 +26,20 @@ export const useApi = () => {
       // If we got token from localStorage, update the store
       if (token) {
         authStore.token = token
+        // Also get refresh token if available
+        const refreshToken = localStorage.getItem('refreshToken')
+        if (refreshToken) {
+          authStore.refreshToken = refreshToken
+        }
+        // Also get user if available
+        const userStr = localStorage.getItem('user')
+        if (userStr) {
+          try {
+            authStore.user = JSON.parse(userStr)
+          } catch (e) {
+            console.warn('Failed to parse user from localStorage:', e)
+          }
+        }
       }
     }
 

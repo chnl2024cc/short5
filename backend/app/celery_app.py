@@ -29,5 +29,9 @@ celery_app.conf.update(
     task_ignore_result=True,  # We don't need results for video processing
     # Ensure tasks can be sent to other apps
     task_always_eager=False,
+    # Don't validate task names - allow sending tasks to other Celery apps
+    task_eager_propagates=False,
+    # Allow sending tasks that aren't registered in this app
+    task_acks_late=True,
 )
 

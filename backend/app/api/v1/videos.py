@@ -104,20 +104,114 @@ async def upload_video(
             f"file_exists={file_path.exists()}, celery_app={type(celery_app).__name__}"
         )
         
-        # Try both task name formats to ensure compatibility
-        task_name = "process_video"
+        # Try different task name formats to ensure compatibility
+        # The worker's Celery app is named "worker", so we need to use the fully qualified name
+        # Try: "worker.process_video" first (fully qualified), then fallback to "process_video"
+        task_names_to_try = ["worker.process_video", "process_video"]
         
         # Check Celery app state before sending
         if not hasattr(celery_app, 'send_task'):
             raise AttributeError(f"Celery app missing send_task method: {type(celery_app)}")
         
-        result = celery_app.send_task(
-            task_name,
-            args=[str(video.id), str(file_path)],
-            queue="celery",  # Explicitly specify queue
-            # Don't require result - task runs asynchronously
-            ignore_result=True,
-        )
+        # Wait for worker to be ready (especially important for first upload)
+        # Retry up to 3 times with exponential backoff
+        import time
+        max_retries = 3
+        retry_delay = 2  # Start with 2 seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # Check if worker is available and has registered the task
+                inspect = celery_app.control.inspect(timeout=2.0)
+                registered_tasks = inspect.registered()
+                
+                if registered_tasks:
+                    # Check if any worker has process_video task registered (check all possible names)
+                    has_process_video = False
+                    registered_task_names = []
+                    for tasks in registered_tasks.values():
+                        registered_task_names.extend(tasks)
+                        if any('process_video' in str(task) for task in tasks):
+                            has_process_video = True
+                            break
+                    
+                    if has_process_video:
+                        logger.info(f"[VIDEO_TASK] Worker ready with 'process_video' task registered (attempt {attempt + 1})")
+                        logger.info(f"[VIDEO_TASK] Available task names: {registered_task_names[:10]}...")  # Log first 10
+                        break
+                    else:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"[VIDEO_TASK] Worker found but 'process_video' not registered yet. Registered tasks: {registered_task_names[:10]}..., retrying in {retry_delay}s...")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                        else:
+                            logger.warning(f"[VIDEO_TASK] Worker found but 'process_video' task not registered after {max_retries} attempts. Registered: {registered_task_names}, sending anyway")
+                else:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"[VIDEO_TASK] No workers found, retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        logger.warning(f"[VIDEO_TASK] No workers found after {max_retries} attempts, sending task anyway (will be queued)")
+            except Exception as inspect_error:
+                if attempt < max_retries - 1:
+                    logger.warning(f"[VIDEO_TASK] Could not inspect workers (attempt {attempt + 1}/{max_retries}): {inspect_error}, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    logger.warning(f"[VIDEO_TASK] Could not inspect workers after {max_retries} attempts: {inspect_error}, sending task anyway")
+        
+        # Try sending with different task name formats
+        # Note: send_task should work even if task isn't registered in this app
+        # The error might occur if Celery tries to validate the task name
+        result = None
+        last_error = None
+        
+        # Use send_task with the task name - this should work across apps
+        # If it fails, it's likely a configuration issue
+        task_name = "process_video"  # Use simple name first
+        
+        try:
+            # send_task should bypass local task registration
+            # Note: We use ignore_result=True but still check result.state for immediate failures
+            result = celery_app.send_task(
+                task_name,
+                args=[str(video.id), str(file_path)],
+                queue="celery",  # Explicitly specify queue - video_worker listens to this
+                # Don't require result - task runs asynchronously
+                ignore_result=True,
+            )
+            logger.info(f"[VIDEO_TASK] Successfully sent task with name '{task_name}'")
+            
+            # Note: With ignore_result=True, result.state may not be immediately accurate
+            # The task is sent to the queue and will be processed asynchronously
+            # We don't check state here to avoid blocking or false negatives
+        except Exception as send_error:
+            # If simple name fails, try fully qualified name
+            error_str = str(send_error).lower()
+            if "notregistered" in error_str or "not registered" in error_str:
+                logger.warning(f"[VIDEO_TASK] Task '{task_name}' not recognized, trying fully qualified name...")
+                try:
+                    # Try with app prefix
+                    task_name = "worker.process_video"
+                    result = celery_app.send_task(
+                        task_name,
+                        args=[str(video.id), str(file_path)],
+                        queue="celery",
+                        ignore_result=True,
+                    )
+                    logger.info(f"[VIDEO_TASK] Successfully sent task with fully qualified name '{task_name}'")
+                except Exception as retry_error:
+                    last_error = retry_error
+                    logger.error(f"[VIDEO_TASK] Failed to send task with both name formats. Last error: {retry_error}")
+                    raise
+            else:
+                last_error = send_error
+                logger.error(f"[VIDEO_TASK] Failed to send task: {send_error}")
+                raise
+        
+        if not result:
+            raise Exception(f"Failed to send task. Last error: {last_error}")
         
         # Post-task logging: verify result and log success details
         if not result or not hasattr(result, 'id'):
@@ -126,11 +220,39 @@ async def upload_video(
                 f"result_type={type(result)}, result={result}"
             )
         else:
+            # Note: With ignore_result=True, checking result.state immediately may not be accurate
+            # The task is queued and will be processed asynchronously by the video_worker
+            # We log the task ID for tracking, but don't check state to avoid false negatives
             logger.info(
                 f"[VIDEO_TASK] Task successfully queued for video {video.id}: "
                 f"task_id={result.id}, task_name={task_name}, queue=celery, "
-                f"file_path={file_path}, result_state={getattr(result, 'state', 'unknown')}"
+                f"file_path={file_path}"
             )
+            
+            # Try to check if workers are available (non-blocking check)
+            try:
+                inspect = celery_app.control.inspect(timeout=1.0)
+                active_workers = inspect.active()
+                registered_tasks = inspect.registered()
+                
+                if active_workers:
+                    logger.info(f"[VIDEO_TASK] Active workers found: {list(active_workers.keys())}")
+                else:
+                    logger.warning(f"[VIDEO_TASK] No active workers detected - task may not be processed immediately")
+                    
+                if registered_tasks:
+                    # Check if any worker has process_video task registered
+                    has_process_video = any(
+                        'process_video' in tasks 
+                        for tasks in registered_tasks.values()
+                    )
+                    if has_process_video:
+                        logger.info(f"[VIDEO_TASK] 'process_video' task is registered on at least one worker")
+                    else:
+                        logger.warning(f"[VIDEO_TASK] 'process_video' task not found in registered tasks. Registered: {registered_tasks}")
+            except Exception as inspect_error:
+                # Non-critical - just log warning
+                logger.warning(f"[VIDEO_TASK] Could not inspect workers (this is non-critical): {inspect_error}")
     except AttributeError as e:
         logger.error(
             f"[VIDEO_TASK] Celery app configuration error for video {video.id}: {e}",

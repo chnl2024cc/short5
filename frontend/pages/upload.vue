@@ -191,6 +191,21 @@ const authStore = useAuthStore()
 onMounted(() => {
   if (process.client) {
     authStore.initFromStorage()
+    
+    // Double-check authentication after initialization
+    if (!authStore.isAuthenticated) {
+      console.warn('User not authenticated on upload page, redirecting to login')
+      navigateTo('/login')
+      return
+    }
+    
+    // Verify token exists
+    const token = authStore.token || localStorage.getItem('token')
+    if (!token) {
+      console.error('No authentication token found, redirecting to login')
+      navigateTo('/login')
+      return
+    }
   }
 })
 
