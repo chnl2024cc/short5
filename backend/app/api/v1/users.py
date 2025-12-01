@@ -184,16 +184,18 @@ async def get_liked_videos(
     cursor: Optional[str] = None,
     limit: int = 20,
 ):
-    """Get user's liked videos (saved list)"""
-    from app.models.user_liked_video import UserLikedVideo
-    from sqlalchemy import and_
+    """Get user's liked videos - videos the user has voted with direction 'like'"""
     
+    # Query videos where user has voted with direction "like"
     query = (
-        select(Video, User, UserLikedVideo)
-        .join(UserLikedVideo, Video.id == UserLikedVideo.video_id)
+        select(Video, User, Vote)
+        .join(Vote, Video.id == Vote.video_id)
         .join(User, Video.user_id == User.id)
-        .where(UserLikedVideo.user_id == current_user.id)
-        .order_by(UserLikedVideo.created_at.desc())
+        .where(
+            Vote.user_id == current_user.id,
+            cast(Vote.direction, String) == "like"
+        )
+        .order_by(Vote.created_at.desc())
     )
     
     if cursor:
@@ -201,7 +203,7 @@ async def get_liked_videos(
         try:
             from datetime import datetime
             cursor_time = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
-            query = query.where(UserLikedVideo.created_at < cursor_time)
+            query = query.where(Vote.created_at < cursor_time)
         except Exception:
             # If cursor parsing fails, ignore it
             pass
@@ -212,11 +214,16 @@ async def get_liked_videos(
     rows = result.all()
     
     videos = []
-    for video, user, liked_video in rows:
+    for video, user, vote in rows:
         # Get stats
         likes_count = await db.execute(
             select(func.count(Vote.id)).where(
                 Vote.video_id == video.id, cast(Vote.direction, String) == "like"
+            )
+        )
+        not_likes_count = await db.execute(
+            select(func.count(Vote.id)).where(
+                Vote.video_id == video.id, cast(Vote.direction, String) == "not_like"
             )
         )
         views_count = await db.execute(
@@ -236,13 +243,14 @@ async def get_liked_videos(
                 user=UserBasic(id=str(user.id), username=user.username),
                 stats=VideoStats(
                     likes=likes_count.scalar() or 0,
+                    not_likes=not_likes_count.scalar() or 0,
                     views=views_count.scalar() or 0,
                 ),
                 created_at=video.created_at,
             )
         )
     
-    # Use UserLikedVideo.created_at for cursor (when the user liked it)
+    # Use Vote.created_at for cursor (when the user liked it)
     next_cursor = rows[-1][2].created_at.isoformat() if rows else None
     has_more = len(rows) == limit
     
