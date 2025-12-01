@@ -9,6 +9,7 @@
     @mousemove="onMouseMove"
     @mouseup="onMouseEnd"
     @mouseleave="onMouseEnd"
+    @click="handleContainerClick"
   >
     <!-- Loading State -->
     <div
@@ -49,10 +50,9 @@
 
     <video
       ref="videoElement"
-      class="w-full h-full object-contain"
+      class="w-full h-full object-contain cursor-pointer"
       :class="{ 'opacity-0': isLoading || hasError }"
       :autoplay="isActive && !isLoading && !hasError"
-      :muted="true"
       :loop="true"
       playsinline
       preload="auto"
@@ -60,6 +60,8 @@
       @timeupdate="onTimeUpdate"
       @waiting="onVideoWaiting"
       @playing="onVideoPlaying"
+      @pause="onVideoPause"
+      @play="onVideoPlay"
       @canplay="onVideoCanPlay"
       @error="onVideoError"
       @loadstart="onVideoLoadStart"
@@ -78,10 +80,31 @@
       v-if="showOverlay"
       :class="['swipe-overlay', overlayClass]"
       :style="{ opacity: overlayOpacity }"
+      @click.stop
     >
       <div class="swipe-overlay-text">
         {{ overlayText }}
       </div>
+    </div>
+    
+    <!-- Play/Pause Overlay - Shows when video is paused -->
+    <div
+      v-if="!isLoading && !hasError && isVideoPaused"
+      class="absolute inset-0 flex items-center justify-center z-35 pointer-events-none"
+    >
+      <button
+        @click.stop="togglePlayPause"
+        class="p-6 bg-black/60 hover:bg-black/80 rounded-full transition-all backdrop-blur-sm shadow-lg pointer-events-auto"
+        aria-label="Play video"
+      >
+        <svg
+          class="w-16 h-16 text-white"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      </button>
     </div>
     
     <!-- Video Info Overlay -->
@@ -150,6 +173,8 @@ const hasError = ref(false)
 const errorMessage = ref('')
 const isRetrying = ref(false)
 const isBuffering = ref(false)
+const isVideoPaused = ref(false) // Track video paused state for play button overlay
+
 const retryCount = ref(0)
 const maxRetries = 3
 const retryDelay = 2000 // 2 seconds
@@ -163,6 +188,7 @@ const currentX = ref(0)
 const currentY = ref(0)
 const isDragging = ref(false)
 const swipeDirection = ref<'like' | 'not_like' | null>(null)
+const touchStartTime = ref(0)
 
 // Overlay state
 const showOverlay = computed(() => isDragging.value && swipeDirection.value !== null)
@@ -201,6 +227,8 @@ const onTouchStart = (e: TouchEvent) => {
   startX.value = coords.x
   startY.value = coords.y
   isDragging.value = true
+  // Store touch start time for tap detection
+  touchStartTime.value = Date.now()
 }
 
 const onMouseDown = (e: MouseEvent) => {
@@ -208,6 +236,8 @@ const onMouseDown = (e: MouseEvent) => {
   startX.value = coords.x
   startY.value = coords.y
   isDragging.value = true
+  // Store mouse down time for click detection
+  touchStartTime.value = Date.now()
 }
 
 const onTouchMove = (e: TouchEvent) => {
@@ -247,17 +277,40 @@ const onMouseEnd = () => {
   handleSwipeEnd()
 }
 
+// Handle direct clicks on container (fallback for tap detection)
+const handleContainerClick = (e: MouseEvent) => {
+  // Only handle if it's a simple click (not part of a drag)
+  if (!isDragging.value) {
+    // Check if click target is the container or video (not a button or overlay)
+    const target = e.target as HTMLElement
+    if (target === swipeContainer.value || target === videoElement.value || target.closest('.video-container')) {
+      // Small delay to avoid double-triggering with touch events
+      setTimeout(() => {
+        if (!isDragging.value) {
+          togglePlayPause()
+        }
+      }, 100)
+    }
+  }
+}
+
 const handleSwipeEnd = () => {
   if (!isDragging.value) return
   
   const deltaX = currentX.value - startX.value
+  const deltaY = Math.abs(currentY.value - startY.value)
   const threshold = 100 // Minimum swipe distance
+  const touchDuration = Date.now() - touchStartTime.value
+  const isTap = Math.abs(deltaX) < 10 && deltaY < 10 && touchDuration < 300 // Tap if movement < 10px and duration < 300ms
   
   if (Math.abs(deltaX) > threshold && swipeDirection.value) {
     // Swipe completed
     emit('swiped', swipeDirection.value)
     // Vote on video
     videosStore.voteOnVideo(props.video.id, swipeDirection.value)
+  } else if (isTap) {
+    // It's a tap/click - toggle play/pause
+    togglePlayPause()
   }
   
   // Reset
@@ -265,6 +318,7 @@ const handleSwipeEnd = () => {
   swipeDirection.value = null
   currentX.value = 0
   currentY.value = 0
+  touchStartTime.value = 0
 }
 
 // Initialize HLS video playback with proper error handling
@@ -442,6 +496,7 @@ const onVideoCanPlay = () => {
 const onVideoPlaying = () => {
   isLoading.value = false
   isBuffering.value = false
+  isVideoPaused.value = false
   if (bufferingTimeout) {
     clearTimeout(bufferingTimeout)
     bufferingTimeout = null
@@ -466,6 +521,41 @@ const onTimeUpdate = () => {
     const seconds = Math.floor(videoElement.value.currentTime)
     emit('viewUpdate', seconds)
   }
+}
+
+// Toggle play/pause on video click/tap
+const togglePlayPause = () => {
+  if (!videoElement.value || isLoading.value || hasError.value) return
+  
+  if (videoElement.value.paused) {
+    videoElement.value.play().catch((err) => {
+      console.warn('Play failed:', err)
+    })
+    isVideoPaused.value = false
+  } else {
+    videoElement.value.pause()
+    isVideoPaused.value = true
+  }
+}
+
+// Watch video element for pause/play events to update overlay
+watch(
+  () => videoElement.value?.paused,
+  (paused) => {
+    if (videoElement.value) {
+      isVideoPaused.value = paused ?? false
+    }
+  },
+  { immediate: true }
+)
+
+// Also listen to video pause/play events
+const onVideoPause = () => {
+  isVideoPaused.value = true
+}
+
+const onVideoPlay = () => {
+  isVideoPaused.value = false
 }
 
 onMounted(() => {
