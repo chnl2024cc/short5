@@ -22,7 +22,6 @@ export interface Video {
   description?: string
   status: VideoStatus
   thumbnail?: string | null
-  url_hls?: string | null
   url_mp4?: string | null
   duration_seconds?: number | null
   error_reason?: string | null

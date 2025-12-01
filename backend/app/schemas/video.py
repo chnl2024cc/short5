@@ -45,8 +45,7 @@ class VideoResponse(VideoBase):
     id: str
     status: VideoStatus
     thumbnail: Optional[str] = None
-    url_hls: Optional[str] = None
-    url_mp4: Optional[str] = None
+    url_mp4: Optional[str] = None  # MP4 format - works in all modern browsers
     duration_seconds: Optional[int] = None
     error_reason: Optional[str] = None  # Error message if video failed
     user: UserBasic

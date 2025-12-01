@@ -26,7 +26,7 @@ async def test_deletion():
             return
         
         print(f"Testing deletion for video: {video.id}")
-        print(f"Video URLs: HLS={video.url_hls}, MP4={video.url_mp4}, Thumbnail={video.thumbnail}")
+        print(f"Video URLs: MP4={video.url_mp4}, Thumbnail={video.thumbnail}")
         
         try:
             deletion_result = await video_deletion_service.delete_video(

@@ -53,7 +53,6 @@ class Video(Base):
     title = Column(String(255))
     description = Column(Text)
     status = Column(VideoStatusType(), default=VideoStatus.UPLOADING, index=True)
-    url_hls = Column(Text)
     url_mp4 = Column(Text)
     thumbnail = Column(Text)
     duration_seconds = Column(Integer)

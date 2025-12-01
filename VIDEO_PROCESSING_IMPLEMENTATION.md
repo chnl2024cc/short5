@@ -18,8 +18,8 @@ User Upload → Backend (FastAPI) → Redis Queue → Video Worker (FFmpeg) → 
 
 2. **Video Worker (FFmpeg Docker Container)**
    - Listens to Redis queue for `process_video` tasks
-   - Processes video: HLS transcoding + thumbnail
-   - Updates DB: status → `ready`, sets `url_hls`, `thumbnail`
+   - Processes video: MP4 transcoding + thumbnail
+   - Updates DB: status → `ready`, sets `url_mp4`, `thumbnail`
    - Uploads to S3/R2 (or local storage in dev mode)
 
 3. **Redis Queue**
@@ -40,7 +40,7 @@ User Upload → Backend (FastAPI) → Redis Queue → Video Worker (FFmpeg) → 
 - **Function**: `process_video(video_id: str, file_path: str)`
 - **Process**:
   1. Verify file exists
-  2. Transcode to HLS (720p, 480p)
+  2. Transcode to MP4 (single universal stream)
   3. Create thumbnail
   4. Upload to storage (S3/R2 or local)
   5. Update DB status to `ready`

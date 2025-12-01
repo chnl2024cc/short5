@@ -42,8 +42,6 @@ async def check_video(video_id: str):
         print(f"  Updated: {video.updated_at}")
         if video.error_reason:
             print(f"  Error: {video.error_reason}")
-        if video.url_hls:
-            print(f"  HLS URL: {video.url_hls}")
         if video.thumbnail:
             print(f"  Thumbnail: {video.thumbnail}")
         
@@ -53,7 +51,7 @@ async def check_video(video_id: str):
         else:
             file_ext = ".mp4"
         
-        file_path = Path(f"/app/uploads/{video.id}{file_ext}")
+        file_path = Path(f"/app/uploads/originals/{video.id}{file_ext}")
         print(f"\n  File path: {file_path}")
         print(f"  File exists: {file_path.exists()}")
         if file_path.exists():

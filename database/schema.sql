@@ -28,7 +28,6 @@ CREATE TABLE videos (
     title VARCHAR(255),
     description TEXT,
     status video_status DEFAULT 'uploading',
-    url_hls TEXT,
     url_mp4 TEXT,
     thumbnail TEXT,
     duration_seconds INTEGER,

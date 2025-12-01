@@ -43,36 +43,11 @@ async def check_video(video_id: str = None):
             print(f"Status: {video.status}")
             print(f"Title: {video.title or 'Untitled'}")
             print(f"\nURLs:")
-            print(f"  url_hls: {video.url_hls}")
             print(f"  url_mp4: {video.url_mp4}")
             print(f"  thumbnail: {video.thumbnail}")
             
             # Check if URLs are accessible
             base_url = "http://localhost:8000"
-            
-            if video.url_hls:
-                print(f"\n  Checking HLS URL...")
-                # Check if it's a relative URL
-                if video.url_hls.startswith("/"):
-                    test_url = f"{base_url}{video.url_hls}"
-                else:
-                    test_url = video.url_hls
-                
-                print(f"    Full URL: {test_url}")
-                try:
-                    async with httpx.AsyncClient(timeout=5.0) as client:
-                        response = await client.head(test_url)
-                        print(f"    Status: {response.status_code}")
-                        if response.status_code == 200:
-                            print(f"    ✓ HLS playlist is accessible")
-                            # Try to fetch and check content
-                            response = await client.get(test_url)
-                            content = response.text[:200]
-                            print(f"    Content preview: {content[:100]}...")
-                        else:
-                            print(f"    ✗ HLS playlist returned {response.status_code}")
-                except Exception as e:
-                    print(f"    ✗ Error accessing HLS URL: {e}")
             
             if video.url_mp4:
                 print(f"\n  Checking MP4 URL...")
@@ -113,13 +88,14 @@ async def check_video(video_id: str = None):
                     print(f"    ✗ Error accessing thumbnail URL: {e}")
             
             # Check if files exist on disk (for local storage)
-            if video.url_hls and video.url_hls.startswith("/uploads"):
-                file_path = Path(f"/app/uploads/processed/{video.url_hls.replace('/uploads/processed/', '')}")
-                print(f"\n  Local file check:")
+            if video.url_mp4 and video.url_mp4.startswith("/uploads/processed"):
+                # New structure: /uploads/processed/{video_id}/video.mp4
+                file_path = Path(f"/app/uploads/processed/{video.url_mp4.replace('/uploads/processed/', '')}")
+                print(f"\n  Local file check (MP4):")
                 print(f"    Expected path: {file_path}")
                 print(f"    File exists: {file_path.exists()}")
                 if file_path.exists():
-                    print(f"    File size: {file_path.stat().st_size} bytes")
+                    print(f"    File size: {file_path.stat().st_size / 1024 / 1024:.2f} MB")
             
             print(f"\n{'-'*80}\n")
     

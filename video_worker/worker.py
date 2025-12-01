@@ -1,6 +1,6 @@
 """
 FFmpeg Video Processing Worker
-Processes videos: transcodes to HLS, creates thumbnails, stores in local Docker volume
+Processes videos: transcodes to MP4, creates thumbnails, stores in local Docker volume
 """
 import os
 import subprocess
@@ -74,21 +74,6 @@ print("📦 Using local file storage (Docker volume)")
 TEMP_DIR = Path("/tmp/video_processing")
 TEMP_DIR.mkdir(exist_ok=True)
 
-# Video encoding settings
-VIDEO_PROFILES = {
-    "720p": {
-        "resolution": "1280x720",
-        "bitrate": "2500k",
-        "audio_bitrate": "128k",
-    },
-    "480p": {
-        "resolution": "854x480",
-        "bitrate": "1000k",
-        "audio_bitrate": "96k",
-    },
-}
-
-
 def update_video_status(video_id: str, status: str, **kwargs):
     """Update video status in database"""
     from uuid import UUID
@@ -97,6 +82,11 @@ def update_video_status(video_id: str, status: str, **kwargs):
         with SessionLocal() as session:
             update_fields = {"status": status}
             update_fields.update(kwargs)
+            
+            # Debug: Log what we're updating
+            print(f"  [DB UPDATE] Video {video_id}: {list(update_fields.keys())}")
+            if "url_mp4" in update_fields:
+                print(f"  [DB UPDATE] url_mp4 value: {update_fields['url_mp4']}")
             
             # Convert video_id to UUID if it's a string
             video_uuid = UUID(video_id) if isinstance(video_id, str) else video_id
@@ -114,6 +104,10 @@ def update_video_status(video_id: str, status: str, **kwargs):
             params["video_id"] = str(video_uuid)
             
             set_clause = ", ".join(set_parts)
+            # Debug: Print the SQL query being executed
+            print(f"  [DB UPDATE] SQL: UPDATE videos SET {set_clause} WHERE id = :video_id")
+            print(f"  [DB UPDATE] Params: {list(params.keys())}")
+            
             # Use CAST in SQL instead of :: syntax to avoid parameter binding issues
             query = text(f"""
                 UPDATE videos 
@@ -127,8 +121,23 @@ def update_video_status(video_id: str, status: str, **kwargs):
             rows_updated = result.rowcount
             if rows_updated == 0:
                 print(f"⚠ WARNING: No rows updated for video_id {video_id}")
+                # Try to verify the video exists
+                check_query = text("SELECT id, status, url_mp4 FROM videos WHERE id = CAST(:video_id AS uuid)")
+                check_result = session.execute(check_query, {"video_id": str(video_uuid)})
+                row = check_result.fetchone()
+                if row:
+                    print(f"  [DB UPDATE] Video exists: status={row[1]}, url_mp4={row[2]}")
+                else:
+                    print(f"  [DB UPDATE] Video does not exist in database!")
             else:
                 print(f"✓ Database updated: {rows_updated} row(s) for video {video_id}")
+                if "url_mp4" in update_fields:
+                    print(f"  [DB UPDATE] ✓ url_mp4 saved: {update_fields['url_mp4']}")
+                    # Verify it was actually saved
+                    verify_query = text("SELECT url_mp4 FROM videos WHERE id = CAST(:video_id AS uuid)")
+                    verify_result = session.execute(verify_query, {"video_id": str(video_uuid)})
+                    saved_value = verify_result.scalar()
+                    print(f"  [DB UPDATE] Verification: url_mp4 in DB = {saved_value}")
                 
     except Exception as e:
         print(f"✗ ERROR updating video status for {video_id}: {e}")
@@ -143,7 +152,7 @@ def cleanup_failed_video(video_id: str, file_path: Path):
     
     Removes:
     - Original uploaded file
-    - Processed files (HLS segments, playlists, thumbnails)
+    - Processed files (MP4 outputs, thumbnails)
     - Temporary processing directories
     """
     import shutil
@@ -243,80 +252,36 @@ def validate_video_file(file_path: Path) -> tuple[bool, Optional[str]]:
     return True, None
 
 
-def transcode_to_hls(input_path: Path, output_dir: Path, video_id: str):
+def transcode_to_mp4(input_path: Path, output_path: Path):
     """
-    Transcode video to HLS format with multiple quality levels
+    Transcode video to MP4 format optimized for web playback
+    Uses H.264 video codec and AAC audio codec for maximum browser compatibility
     """
-    hls_playlist = output_dir / f"{video_id}.m3u8"
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-i", str(input_path),
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "23",  # Good quality/size balance
+        "-c:a", "aac",
+        "-b:a", "128k",  # Audio bitrate
+        "-movflags", "+faststart",  # Optimize for web streaming (metadata at beginning)
+        "-pix_fmt", "yuv420p",  # Ensure compatibility
+        "-y",  # Overwrite output file
+        str(output_path),
+    ]
     
-    # Create HLS segments for each quality
-    for quality, profile in VIDEO_PROFILES.items():
-        segment_dir = output_dir / quality
-        segment_dir.mkdir(exist_ok=True)
-        
-        segment_pattern = str(segment_dir / f"{video_id}_%03d.ts")
-        playlist_file = segment_dir / f"{video_id}.m3u8"
-        
-        ffmpeg_cmd = [
-            "ffmpeg",
-            "-i", str(input_path),
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "23",
-            "-c:a", "aac",
-            "-b:v", profile["bitrate"],
-            "-b:a", profile["audio_bitrate"],
-            "-s", profile["resolution"],
-            "-hls_time", "10",
-            "-hls_list_size", "0",
-            "-hls_segment_filename", segment_pattern,
-            "-f", "hls",
-            str(playlist_file),
-        ]
-        
-        result = subprocess.run(
-            ffmpeg_cmd, 
-            check=True, 
-            capture_output=True,
-            text=True
-        )
-        # Log FFmpeg output if there are warnings (stderr)
-        if result.stderr:
-            # FFmpeg outputs info to stderr, but errors are also there
-            # Only log if it looks like an error (contains "Error" or "error")
-            if "error" in result.stderr.lower():
-                print(f"    FFmpeg warning/error for {quality}: {result.stderr[:200]}")
+    result = subprocess.run(
+        ffmpeg_cmd,
+        check=True,
+        capture_output=True,
+        text=True
+    )
     
-    # Create master playlist
-    # HLS master playlist format: BANDWIDTH must be in bits per second (integer)
-    # BANDWIDTH should include both video and audio bitrates
-    def parse_bitrate(bitrate_str: str) -> int:
-        """Convert bitrate string (e.g., '2500k') to bits per second (integer)"""
-        if bitrate_str.endswith('k'):
-            return int(float(bitrate_str[:-1]) * 1000)  # Convert kbps to bps
-        elif bitrate_str.endswith('M'):
-            return int(float(bitrate_str[:-1]) * 1000000)  # Convert Mbps to bps
-        else:
-            # Assume it's already in bps
-            return int(bitrate_str)
+    if result.stderr and "error" in result.stderr.lower():
+        print(f"    FFmpeg warning/error: {result.stderr[:200]}")
     
-    master_playlist_content = "#EXTM3U\n"
-    for quality in VIDEO_PROFILES.keys():
-        profile = VIDEO_PROFILES[quality]
-        # Calculate total bandwidth (video + audio)
-        video_bw = parse_bitrate(profile["bitrate"])
-        audio_bw = parse_bitrate(profile["audio_bitrate"])
-        total_bandwidth = video_bw + audio_bw
-        
-        # Include RESOLUTION for better compatibility
-        resolution = profile["resolution"]
-        
-        # Create EXT-X-STREAM-INF tag with BANDWIDTH and RESOLUTION
-        master_playlist_content += f'#EXT-X-STREAM-INF:BANDWIDTH={total_bandwidth},RESOLUTION={resolution}\n'
-        master_playlist_content += f"{quality}/{video_id}.m3u8\n"
-    
-    hls_playlist.write_text(master_playlist_content)
-    return hls_playlist
+    return output_path
 
 
 def create_thumbnail(input_path: Path, output_path: Path, timestamp: str = "00:00:01"):
@@ -338,20 +303,19 @@ def store_file(local_path: Path, storage_key: str) -> str:
     
     Args:
         local_path: Path to source file
-        storage_key: Storage path key (e.g., "videos/{video_id}/playlist.m3u8")
+        storage_key: Storage path key (e.g., "{video_id}/video.mp4")
     
     Returns:
-        URL path that backend can serve (e.g., "/uploads/processed/videos/{video_id}/playlist.m3u8")
+        URL path that backend can serve (e.g., "/uploads/processed/{video_id}/video.mp4")
     """
     try:
-        # Store files in processed directory with preserved structure
-        # IMPORTANT: Preserve directory structure for HLS playlists to work correctly
-        # HLS playlists use relative paths, so we need to maintain the same structure
+        # Store files in processed directory
+        # Structure: processed/{video_id}/video.mp4
+        #           processed/{video_id}/thumbnail.jpg
         local_storage = Path("/app/uploads/processed")
         local_storage.mkdir(parents=True, exist_ok=True)
         
-        # Preserve directory structure from storage key (e.g., videos/video_id/720p/segment.ts)
-        # This ensures HLS playlist relative paths resolve correctly
+        # Create destination path preserving directory structure
         dest_path = local_storage / storage_key
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -417,8 +381,8 @@ def process_video(self, video_id: str, file_path: str):
         sys.stderr.flush()
         raise
     if not input_path.is_absolute():
-        # If relative, assume it's relative to /app/uploads
-        input_path = Path("/app/uploads") / input_path
+        # If relative, assume it's relative to /app/uploads/originals
+        input_path = Path("/app/uploads/originals") / input_path
         print(f"⚠ Converted relative path to absolute: {input_path}")
     
     error_category = None
@@ -457,12 +421,13 @@ def process_video(self, video_id: str, file_path: str):
         output_dir = TEMP_DIR / video_id
         output_dir.mkdir(exist_ok=True)
         
-        # Transcode to HLS (per RFC: HLS + mp4)
-        print("  → Transcoding to HLS format...")
-        hls_playlist = transcode_to_hls(input_path, output_dir, video_id)
-        print("  ✓ HLS transcoding complete")
+        # Transcode to MP4 (simple, universal format)
+        print("  → Transcoding to MP4 format...")
+        mp4_path = output_dir / f"{video_id}.mp4"
+        transcode_to_mp4(input_path, mp4_path)
+        print("  ✓ MP4 transcoding complete")
         
-        # Create thumbnail (per RFC: Thumbnail + Preview)
+        # Create thumbnail
         print("  → Creating thumbnail...")
         thumbnail_path = output_dir / f"{video_id}_thumb.jpg"
         create_thumbnail(input_path, thumbnail_path)
@@ -471,28 +436,15 @@ def process_video(self, video_id: str, file_path: str):
         # Step 4: Store processed files in local storage
         print("  → Storing processed files...")
         try:
-            hls_url = store_file(hls_playlist, f"videos/{video_id}/playlist.m3u8")
+            # Store MP4 file: processed/{video_id}/video.mp4
+            mp4_url = store_file(mp4_path, f"{video_id}/video.mp4")
             
-            # Store HLS segments
-            segment_count = 0
-            for quality in VIDEO_PROFILES.keys():
-                segment_dir = output_dir / quality
-                for segment_file in segment_dir.glob("*.ts"):
-                    storage_key = f"videos/{video_id}/{quality}/{segment_file.name}"
-                    store_file(segment_file, storage_key)
-                    segment_count += 1
-                
-                # Store quality playlist
-                quality_playlist = segment_dir / f"{video_id}.m3u8"
-                if quality_playlist.exists():
-                    storage_key = f"videos/{video_id}/{quality}/{quality_playlist.name}"
-                    store_file(quality_playlist, storage_key)
-            
-            # Store thumbnail (if it was created successfully)
+            # Store thumbnail: processed/{video_id}/thumbnail.jpg
             thumbnail_url = None
             if thumbnail_path and thumbnail_path.exists():
-                thumbnail_url = store_file(thumbnail_path, f"videos/{video_id}/thumbnail.jpg")
-            print(f"  ✓ Storage complete ({segment_count} segments + playlists" + (f" + thumbnail" if thumbnail_url else "") + ")")
+                thumbnail_url = store_file(thumbnail_path, f"{video_id}/thumbnail.jpg")
+            
+            print(f"  ✓ Storage complete (MP4 + thumbnail)")
         except Exception as e:
             error_category = "STORAGE_ERROR"
             user_friendly_error = "Failed to store processed video files."
@@ -522,18 +474,19 @@ def process_video(self, video_id: str, file_path: str):
         
         # Step 6: Update database with processed video URLs
         update_data = {
-            "status": "ready",
-            "url_hls": hls_url,
+            "url_mp4": mp4_url,
             "duration_seconds": int(duration),
             "error_reason": None,  # Clear any previous errors
         }
         if thumbnail_url:
             update_data["thumbnail"] = thumbnail_url
         
-        update_video_status(video_id, **update_data)
+        print(f"  → Updating database with: status=ready, url_mp4={mp4_url}, duration={int(duration)}")
+        # Pass status as positional argument, other fields as kwargs
+        update_video_status(video_id, "ready", **update_data)
         
         print(f"✓ Video {video_id} processed successfully")
-        print(f"  HLS URL: {hls_url}")
+        print(f"  MP4 URL: {mp4_url}")
         print(f"  Thumbnail: {thumbnail_url}")
         
         # Cleanup temp files

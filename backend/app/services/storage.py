@@ -42,7 +42,7 @@ class StorageService:
         
         Args:
             video_id: UUID of the video
-            video_urls: Dict with keys like 'url_hls', 'url_mp4', 'thumbnail' (not used, kept for API compatibility)
+            video_urls: Dict with keys like 'url_mp4', 'thumbnail'
         
         Returns:
             Dict with deletion results
@@ -53,17 +53,17 @@ class StorageService:
             "mode": "local"
         }
         
-        # Delete processed files (HLS segments, playlists, thumbnails)
+        # Delete processed files (MP4, thumbnails)
         processed_dir = Path("/app/uploads/processed")
         if processed_dir.exists():
             # Delete entire video directory if it exists
-            video_dir = processed_dir / "videos" / video_id
+            video_dir = processed_dir / video_id
             if video_dir.exists() and video_dir.is_dir():
                 try:
                     shutil.rmtree(video_dir, ignore_errors=True)
-                    results["deleted_files"].append(f"processed/videos/{video_id}/")
+                    results["deleted_files"].append(f"processed/{video_id}/")
                 except Exception as e:
-                    results["failed_files"].append(f"processed/videos/{video_id}/: {e}")
+                    results["failed_files"].append(f"processed/{video_id}/: {e}")
             
             # Also try pattern matching as fallback
             pattern = f"*{video_id}*"
@@ -72,11 +72,11 @@ class StorageService:
                 results["deleted_files"].append(f"{pattern} ({deleted_count} files)")
         
         # Delete original uploaded file
-        upload_dir = Path("/app/uploads")
-        if upload_dir.exists():
+        originals_dir = Path("/app/uploads/originals")
+        if originals_dir.exists():
             # Try common extensions
             for ext in [".mp4", ".mov", ".avi"]:
-                file_path = upload_dir / f"{video_id}{ext}"
+                file_path = originals_dir / f"{video_id}{ext}"
                 if file_path.exists():
                     if self.delete_local_file(file_path):
                         results["deleted_files"].append(str(file_path))

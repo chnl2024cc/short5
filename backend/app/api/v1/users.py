@@ -230,7 +230,6 @@ async def get_liked_videos(
                 description=video.description,
                 status=video.status.value,
                 thumbnail=video.thumbnail,
-                url_hls=video.url_hls,
                 url_mp4=video.url_mp4,
                 duration_seconds=video.duration_seconds,
                 error_reason=video.error_reason,  # Include error reason if video failed
@@ -301,7 +300,6 @@ async def get_my_videos(
                 description=video.description,
                 status=video.status.value,
                 thumbnail=video.thumbnail,
-                url_hls=video.url_hls,
                 url_mp4=video.url_mp4,
                 duration_seconds=video.duration_seconds,
                 error_reason=video.error_reason,  # Include error reason if video failed

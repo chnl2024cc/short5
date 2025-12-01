@@ -19,7 +19,7 @@ Celery task sent to queue IMMEDIATELY ⚡
     ↓
 Video Worker picks up task
     ↓
-Transcoding (HLS + thumbnail)
+Transcoding (MP4 + thumbnail)
     ↓
 Status: READY
     ↓

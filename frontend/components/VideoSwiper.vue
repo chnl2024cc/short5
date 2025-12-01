@@ -119,37 +119,6 @@ const getAbsoluteUrl = (url: string | null | undefined): string | null => {
   return `${backendBaseUrl}/${url}`
 }
 
-// Lazy load hls.js - using function to prevent Vite from analyzing at build time
-let hlsModule: any = null
-let hlsLoaded = false
-
-const loadHls = async (): Promise<any> => {
-  if (!process.client) return null
-  
-  if (hlsLoaded && hlsModule) {
-    return hlsModule
-  }
-  
-  try {
-    // Use dynamic import with string literal to prevent static analysis
-    const moduleName = 'hls.js'
-    hlsModule = await import(/* @vite-ignore */ moduleName)
-    hlsModule = hlsModule.default || hlsModule
-    hlsLoaded = true
-    return hlsModule
-  } catch (err) {
-    console.warn('Failed to load hls.js:', err)
-    return null
-  }
-}
-
-// Get Hls - returns the loaded Hls class
-const getHls = async () => {
-  if (process.client) {
-    return await loadHls()
-  }
-  return null
-}
 
 interface Props {
   video: Video
@@ -169,7 +138,6 @@ const emit = defineEmits<{
 const videosStore = useVideosStore()
 const swipeContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
-let hlsInstance: any = null // Hls instance (type from hls.js library loaded via plugin)
 
 // Video state
 const isLoading = ref(true)
@@ -311,16 +279,6 @@ const initializeVideo = async (retry = false) => {
   
   const video = videoElement.value
   
-  // Clean up previous HLS instance
-  if (hlsInstance) {
-    try {
-      hlsInstance.destroy()
-    } catch (e) {
-      console.warn('Error destroying HLS instance:', e)
-    }
-    hlsInstance = null
-  }
-  
   // Clear any existing retry timeout
   if (retryTimeout) {
     clearTimeout(retryTimeout)
@@ -328,115 +286,8 @@ const initializeVideo = async (retry = false) => {
   }
   
   try {
-    // Handle HLS playback
-    if (props.video.url_hls) {
-      const hlsSrc = getAbsoluteUrl(props.video.url_hls)
-      if (!hlsSrc) {
-        throw new Error('HLS URL is invalid')
-      }
-      
-      console.log(`[VideoSwiper] Loading HLS from: ${hlsSrc}`)
-      
-      // Check if browser supports native HLS (Safari)
-      if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari)
-        console.log(`[VideoSwiper] Using native HLS support (Safari)`)
-        video.src = hlsSrc
-        video.load()
-        
-        // Set up error handlers for native HLS
-        video.addEventListener('error', handleNativeVideoError, { once: true })
-      } else {
-        // Load hls.js dynamically for browsers with MSE support (Chrome, Firefox, Edge)
-        const Hls = await loadHls()
-        
-        if (Hls && Hls.isSupported()) {
-          // Use hls.js for browsers with MSE support
-          console.log(`[VideoSwiper] Using HLS.js for playback`)
-          hlsInstance = new Hls({
-          enableWorker: true,
-          lowLatencyMode: false,
-          backBufferLength: 90,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60,
-          maxBufferSize: 60 * 1000 * 1000, // 60MB
-          maxBufferHole: 0.5,
-          highBufferWatchdogPeriod: 2,
-          nudgeOffset: 0.1,
-          nudgeMaxRetry: 3,
-          maxFragLoadingTimeOut: 20,
-          fragLoadingTimeOut: 20,
-          manifestLoadingTimeOut: 10,
-          levelLoadingTimeOut: 10,
-        })
-        
-        hlsInstance.loadSource(hlsSrc)
-        hlsInstance.attachMedia(video)
-        
-        // Log when manifest is loaded (master or media playlist)
-        hlsInstance.on(Hls.Events.MANIFEST_LOADED, (event: any, data: any) => {
-          console.log(`[VideoSwiper] HLS manifest loaded:`, data)
-        })
-        
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, (event: any, data: any) => {
-          console.log(`[VideoSwiper] HLS manifest parsed. Levels:`, data.levels?.length || 0)
-          isLoading.value = false
-          if (props.isActive) {
-            video.play().catch((err) => {
-              console.warn('Autoplay blocked:', err)
-              // Autoplay blocked, user interaction required
-            })
-          }
-        })
-        
-        hlsInstance.on(Hls.Events.ERROR, (event: any, data: any) => {
-          console.error(`[VideoSwiper] HLS error:`, {
-            type: data.type,
-            details: data.details,
-            fatal: data.fatal,
-            error: data.error,
-            url: data.url,
-            response: data.response
-          })
-          
-          // Check for manifest parsing errors (common when master playlist has wrong format)
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            if (data.details === 'manifestLoadError' || data.details === 1) {
-              console.error(`[VideoSwiper] Failed to load manifest from: ${hlsSrc}`)
-            } else if (data.details === 'manifestParsingError' || data.details === 2) {
-              console.error(`[VideoSwiper] Failed to parse manifest. This usually means the master playlist has invalid format.`)
-              console.error(`[VideoSwiper] Check if BANDWIDTH is an integer (e.g., 2628000) not a string (e.g., "2500k")`)
-              console.error(`[VideoSwiper] Run: docker-compose exec backend python /app/scripts/fix_master_playlists.py`)
-            }
-          }
-          
-          handleHlsError(data)
-        })
-        
-        // Monitor buffering
-          hlsInstance.on(Hls.Events.BUFFER_APPENDING, () => {
-            isBuffering.value = false
-            if (bufferingTimeout) {
-              clearTimeout(bufferingTimeout)
-              bufferingTimeout = null
-            }
-          })
-        } else {
-          console.warn('HLS.js not available or not supported, falling back to MP4')
-          // Fallback to MP4 if available
-          const mp4Src = getAbsoluteUrl(props.video.url_mp4)
-          if (mp4Src) {
-            console.log(`[VideoSwiper] Falling back to MP4: ${mp4Src}`)
-            video.src = mp4Src
-            video.load()
-            video.addEventListener('error', handleNativeVideoError, { once: true })
-          } else {
-            throw new Error('HLS not supported and no MP4 fallback available')
-          }
-        }
-      }
-    } else if (props.video.url_mp4) {
-      // Direct MP4 playback (no HLS)
+    // Simple MP4 playback - works in all modern browsers
+    if (props.video.url_mp4) {
       const mp4Src = getAbsoluteUrl(props.video.url_mp4)
       if (!mp4Src) {
         throw new Error('MP4 URL is invalid')
@@ -454,77 +305,6 @@ const initializeVideo = async (retry = false) => {
   }
 }
 
-// Handle HLS-specific errors with retry logic
-const handleHlsError = async (data: any) => {
-  if (!process.client || !hlsInstance) return
-  
-  const Hls = await loadHls()
-  if (!Hls) return
-  
-  console.error('HLS error:', data)
-  
-  if (data.fatal) {
-    switch (data.type) {
-      case Hls.ErrorTypes.NETWORK_ERROR:
-        console.error('Fatal network error, attempting recovery...')
-        if (retryCount.value < maxRetries) {
-          retryCount.value++
-          retryTimeout = setTimeout(() => {
-            hlsInstance?.startLoad()
-          }, retryDelay)
-        } else {
-          // Network error after max retries, try MP4 fallback
-          console.error('Network error persists, falling back to MP4')
-          await fallbackToMp4()
-        }
-        break
-      case Hls.ErrorTypes.MEDIA_ERROR:
-        console.error('Fatal media error, attempting recovery...')
-        try {
-          hlsInstance.recoverMediaError()
-        } catch (e) {
-          console.error('Media error recovery failed:', e)
-          if (retryCount.value < maxRetries) {
-            retryCount.value++
-            retryTimeout = setTimeout(() => {
-              hlsInstance?.recoverMediaError()
-            }, retryDelay)
-          } else {
-            await fallbackToMp4()
-          }
-        }
-        break
-      default:
-        console.error('Fatal HLS error, falling back to MP4')
-        await fallbackToMp4()
-        break
-    }
-  }
-}
-
-// Fallback to MP4 if HLS fails
-const fallbackToMp4 = async () => {
-  if (!videoElement.value || !props.video.url_mp4) {
-    handleVideoError(new Error('HLS failed and no MP4 fallback available'))
-    return
-  }
-  
-  console.log('Falling back to MP4 playback')
-  
-  if (hlsInstance) {
-    try {
-      hlsInstance.destroy()
-    } catch (e) {
-      console.warn('Error destroying HLS during fallback:', e)
-    }
-    hlsInstance = null
-  }
-  
-  const video = videoElement.value
-  video.src = props.video.url_mp4
-  video.load()
-  video.addEventListener('error', handleNativeVideoError, { once: true })
-}
 
 // Handle native video element errors
 const handleNativeVideoError = (event: Event) => {
@@ -617,15 +397,6 @@ const cleanupVideo = () => {
     bufferingTimeout = null
   }
   
-  // Clean up HLS instance
-  if (hlsInstance) {
-    try {
-      hlsInstance.destroy()
-    } catch (e) {
-      console.warn('Error destroying HLS during cleanup:', e)
-    }
-    hlsInstance = null
-  }
   
   // Clean up video element
   if (videoElement.value) {

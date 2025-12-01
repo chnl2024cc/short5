@@ -75,7 +75,7 @@ async def test_video_processing():
                 else:
                     file_ext = ".mp4"
                 
-                file_path = Path(f"/app/uploads/{video.id}{file_ext}")
+                file_path = Path(f"/app/uploads/originals/{video.id}{file_ext}")
                 exists = file_path.exists()
                 print(f"       File exists: {exists} ({file_path})")
                 

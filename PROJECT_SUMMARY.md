@@ -43,7 +43,7 @@ All project files have been created and the project is ready for implementation!
 
 ### 5. Video Worker (FFmpeg) ✅
 - **worker.py** - Complete video processing implementation:
-  - HLS transcoding with multiple quality levels (720p, 480p)
+  - MP4 transcoding
   - Thumbnail generation
   - S3/R2 upload
   - Database status updates
@@ -137,9 +137,9 @@ short5_swiper_bugagaa/
    - Implement video upload
 
 6. **Test video processing**
-   - Test FFmpeg worker with sample video
-   - Verify S3/R2 upload
-   - Test HLS playback
+  - Test FFmpeg worker with sample video
+  - Verify S3/R2 upload
+  - Test MP4 playback
 
 ### Implementation Order (Recommended)
 
@@ -189,7 +189,7 @@ short5_swiper_bugagaa/
 ### Technical Decisions Made
 - **ORM**: SQLAlchemy (async support)
 - **Background Jobs**: Celery (with Redis)
-- **Video Format**: HLS with multiple quality levels
+- **Video Format**: MP4 delivery (HTML5 video)
 - **Storage**: S3-compatible (works with Cloudflare R2)
 - **Auth**: JWT with refresh tokens
 

@@ -15,7 +15,7 @@ Technischer Stack:
 
 * **Frontend:** Nuxt 4 (PWA, Mobile-first)
 * **Backend:** FastAPI (Python, Async)
-* **Video-Pipeline:** FFmpeg Worker, HLS/Thumbnails
+* **Video-Pipeline:** FFmpeg Worker, MP4 + Thumbnails
 * **Storage/CDN:** S3 / Cloudflare R2 + CDN
 * **DB:** PostgreSQL + ORM
 * **Background Jobs:** Redis + Celery / RQ
@@ -43,7 +43,7 @@ Technischer Stack:
 | Vote Synchronization     | Automatische Sync von lokalen Votes nach Login/Registrierung                  | Hoch      |
 | Auth & User Management   | Registrierung, Login, JWT Token, Passwort-Reset                                | Hoch      |
 | Upload                   | Chunked Upload, Video-Metadaten speichern, Status (processing/ready)           | Hoch      |
-| Video-Transcoding        | FFmpeg Worker erzeugt HLS + Thumbnail                                          | Hoch      |
+| Video-Transcoding        | FFmpeg Worker erzeugt MP4 + Thumbnail                                          | Hoch      |
 | Feed                     | Infinite Scroll, vertikales Swipe-Interface, Like/Nicht-Like (optional auth)   | Hoch      |
 | Swipe Mechanik           | Rechts = Like, Links = Nicht-Like                                              | Hoch      |
 | Recommendation Engine    | Likes erhöhen ähnliche Videos im Feed, Nicht-Likes reduzieren ähnliche Inhalte | Mittel    |
@@ -60,7 +60,7 @@ Technischer Stack:
 * **Backend:** FastAPI + Python 3.11, async endpoints
 * **Database:** PostgreSQL, ORM (Tortoise ORM oder SQLAlchemy)
 * **Background Jobs:** Redis + Celery/RQ für Transcoding
-* **Video Processing:** FFmpeg Docker Worker, erzeugt HLS + Thumbnails
+* **Video Processing:** FFmpeg Docker Worker, erzeugt MP4 + Thumbnails
 * **Storage/CDN:** Cloudflare R2 + Edge CDN
 * **Auth:** JWT oder OAuth (Clerk / Keycloak optional)
 * **Feed API:** Cursor-based Pagination für infinite scroll
@@ -78,7 +78,7 @@ id | username | email | password_hash | created_at
 ### Videos
 
 ```sql
-id | user_id | title | description | status | url_hls | url_mp4 | thumbnail | created_at
+id | user_id | title | description | status | url_mp4 | thumbnail | created_at
 ```
 
 ### Likes

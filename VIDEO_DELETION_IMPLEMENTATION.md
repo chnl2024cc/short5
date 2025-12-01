@@ -159,7 +159,7 @@ class StorageService:
         
         Args:
             video_id: UUID of the video
-            video_urls: Dict with keys like 'url_hls', 'url_mp4', 'thumbnail'
+            video_urls: Dict with keys like 'url_mp4', 'thumbnail'
         
         Returns:
             Dict with deletion results
@@ -282,7 +282,6 @@ class VideoDeletionService:
         
         # 2. Collect video URLs before deletion
         video_urls = {
-            "url_hls": video.url_hls,
             "url_mp4": video.url_mp4,
             "thumbnail": video.thumbnail,
         }

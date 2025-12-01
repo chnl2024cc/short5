@@ -40,7 +40,7 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 # Serve static files for processed videos (development mode)
-# This serves both uploaded files and processed files (HLS, thumbnails)
+# This serves both uploaded files and processed files (MP4s, thumbnails)
 # Use absolute path to ensure it works regardless of working directory
 uploads_dir = Path("/app/uploads")
 uploads_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists

@@ -234,8 +234,8 @@
                       Reject
                     </button>
                     <a
-                      v-if="video.url_hls"
-                      :href="video.url_hls"
+                      v-if="video.url_mp4"
+                      :href="getAbsoluteUrl(video.url_mp4)"
                       target="_blank"
                       class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
                     >

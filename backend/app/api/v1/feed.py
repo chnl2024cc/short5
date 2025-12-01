@@ -137,11 +137,15 @@ async def get_feed(
 ):
     """Get personalized video feed"""
     try:
-        # Base query: only ready videos
+        # Base query: only ready videos with MP4 files
         query = (
             select(Video, User)
             .join(User, Video.user_id == User.id)
-            .where(Video.status == VideoStatus.READY)
+            .where(
+                Video.status == VideoStatus.READY,
+                Video.url_mp4.isnot(None),
+                Video.url_mp4 != ""
+            )
         )
         
         # Exclude videos user has already voted on
@@ -214,7 +218,6 @@ async def get_feed(
                         description=video.description,
                         status=video.status.value,
                         thumbnail=video.thumbnail,
-                        url_hls=video.url_hls,
                         url_mp4=video.url_mp4,
                         duration_seconds=video.duration_seconds,
                         user=UserBasic(id=str(user.id), username=user.username),

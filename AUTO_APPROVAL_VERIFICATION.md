@@ -34,7 +34,7 @@ celery_app.send_task(
 **File:** `video_worker/worker.py:465-474`
 
 **Verification:**
-- ✅ Processes video (HLS transcoding, thumbnail)
+- ✅ Processes video (MP4 transcoding, thumbnail)
 - ✅ **Sets status to "ready" automatically** (line 466)
 - ✅ **No approval check** - directly sets to READY
 - ✅ Updates database with processed URLs
@@ -43,12 +43,13 @@ celery_app.send_task(
 **Code:**
 ```python
 update_data = {
-    "status": "ready",  # Auto-approved!
-    "url_hls": hls_url,
+    "url_mp4": mp4_url,
     "duration_seconds": int(duration),
     "error_reason": None,
 }
-update_video_status(video_id, **update_data)
+if thumbnail_url:
+    update_data["thumbnail"] = thumbnail_url
+update_video_status(video_id, "ready", **update_data)
 ```
 
 ### 3. Feed Endpoint ✅

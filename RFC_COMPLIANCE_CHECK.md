@@ -216,9 +216,9 @@ This guide helps you systematically verify that your project implementation alig
   - Check: Matches RFC schema
   
 - [ ] **Video model** - `backend/app/models/video.py`
-  - Check: Has fields: id, user_id, title, description, status, url_hls, url_mp4, thumbnail, created_at
+  - Check: Has fields: id, user_id, title, description, status, url_mp4, thumbnail, created_at
   - Check: Status enum: `processing`, `ready`, `failed`
-  - Check: Matches RFC schema
+  - Check: Matches updated schema
   
 - [ ] **Vote model** - `backend/app/models/vote.py`
   - Check: Has fields: id, user_id, video_id, direction, created_at
@@ -262,25 +262,18 @@ This guide helps you systematically verify that your project implementation alig
   - Test: Start worker → Should connect to Redis
 
 ### ✅ Video Processing
-- [ ] **HLS transcoding** - Converts video to HLS format
-  - Check: `worker.py` has `transcode_to_hls()` function
-  - Check: Creates multiple quality levels (720p, 480p)
-  - Check: Creates master playlist (.m3u8)
-  - Test: Process video → Should generate HLS segments and playlist
+- [ ] **MP4 transcoding** - Converts video to universally supported MP4 format
+  - Check: `worker.py` transcodes uploads to MP4 via FFmpeg
+  - Test: Process video → Should generate `/uploads/processed/videos/{video_id}/video.mp4`
   
 - [ ] **Thumbnail generation** - Creates video thumbnail
   - Check: `worker.py` has `create_thumbnail()` function
   - Check: Extracts frame at timestamp (e.g., 00:00:01)
   - Test: Process video → Should generate thumbnail image
   
-- [ ] **Multiple quality levels** - RFC mentions 1080p, 720p, 480p
-  - Check: `VIDEO_PROFILES` in `worker.py` defines quality levels
-  - Current: 720p, 480p (RFC open question #1 - decided on 720p/480p)
-  - Note: 1080p not implemented (acceptable for MVP)
-  
-- [ ] **HLS segment duration** - 10 seconds per segment
-  - Check: FFmpeg command uses `-hls_time 10`
-  - Test: Generated segments should be ~10 seconds each
+- [ ] **Duration extraction** - Captures video duration for display
+  - Check: FFprobe invocation reads total duration
+  - Test: Process video → Database stores `duration_seconds`
 
 ### ✅ Database Integration
 - [ ] **Status updates** - Updates video status in database
@@ -290,19 +283,18 @@ This guide helps you systematically verify that your project implementation alig
 
 ### ✅ Storage Integration
 - [ ] **S3/R2 upload** - Uploads processed files to object storage
-  - Check: `worker.py` has `upload_to_s3()` function
-  - Check: Uses boto3 client
-  - Check: Uploads HLS files, segments, and thumbnail
+  - Check: `worker.py` has upload helpers (if cloud mode enabled)
+  - Check: Uploads MP4 file and thumbnail
   - Test: Process video → Check S3/R2 bucket for uploaded files
   
-- [ ] **URL generation** - Updates database with CDN URLs
-  - Check: Updates `url_hls` and `thumbnail` fields in database
-  - Test: After processing → Database should have S3/R2 URLs
-
+- [ ] **URL generation** - Updates database with CDN/local URLs
+  - Check: Updates `url_mp4` and `thumbnail` fields in database
+  - Test: After processing → Database should have accessible URLs
+  
 ### ⚠️ Missing Video Worker Features
-- [ ] **MP4 fallback** - RFC mentions HLS + mp4
-  - Status: Only HLS implemented
-  - Priority: Low (HLS is sufficient for mobile-first)
+- [ ] **Adaptive streaming** - RFC originally mentioned HLS ladder
+  - Status: Simplified to MP4-only delivery
+  - Priority: Low (MP4 meets current product goals)
   
 - [ ] **Error handling** - Better error recovery
   - Status: Basic error handling exists
@@ -320,7 +312,7 @@ This guide helps you systematically verify that your project implementation alig
   
 - [ ] **Videos table** - Matches RFC schema
   - Check: Table has all required columns
-  - Verify: Includes status, url_hls, url_mp4, thumbnail
+  - Verify: Includes status, url_mp4, thumbnail
   - Test: Create video → Check database record
   
 - [ ] **Votes table** - Matches RFC schema

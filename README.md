@@ -7,7 +7,7 @@ A self-hosted, mobile-first short-video platform similar to TikTok, built with N
 - 🎥 **Video Feed** - Vertical swipe feed with infinite scroll
 - 👆 **Swipe Mechanics** - Tinder-like swipe: Right = Like, Left = Not-Like
 - 📱 **Mobile-First PWA** - Progressive Web App optimized for mobile devices
-- 🎬 **Video Processing** - Automatic transcoding to HLS with multiple quality levels
+- 🎬 **Video Processing** - Automatic transcoding to MP4 with thumbnail generation
 - 🔐 **Authentication** - JWT-based user authentication
 - 🎯 **Personalized Feed** - Recommendation algorithm based on user interactions
 - 📊 **Admin Dashboard** - Content moderation and reporting system
@@ -30,7 +30,6 @@ A self-hosted, mobile-first short-video platform similar to TikTok, built with N
 
 ### Video Processing
 - **FFmpeg** - Video transcoding
-- **HLS** - HTTP Live Streaming
 - **Docker** - Containerized worker
 
 ### Infrastructure
@@ -108,6 +107,9 @@ A self-hosted, mobile-first short-video platform similar to TikTok, built with N
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - API Docs: http://localhost:8000/docs
+   - **Celery Flower** (Task Monitoring): http://localhost:5555
+     - Default credentials: `admin` / `admin` (change in production!)
+     - Monitor video processing tasks, worker status, and queue health
 
 ### Local Development
 
@@ -179,11 +181,7 @@ Key variables:
 
 ### Video Processing Settings
 
-Video encoding profiles are configured in `video_worker/worker.py`:
-- **720p**: 1280x720, 2500k bitrate
-- **480p**: 854x480, 1000k bitrate
-
-HLS segment duration: 10 seconds
+Video transcoding is configured in `video_worker/worker.py`. Each upload is converted to a high-quality MP4 along with a thumbnail preview.
 
 ## API Documentation
 

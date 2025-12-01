@@ -563,9 +563,9 @@ const loadMoreVideos = () => {
   }
 }
 
-const viewVideo = (video: any) => {
-  // Navigate to feed or video detail page
-  navigateTo('/')
+const viewVideo = (video: Video) => {
+  // Navigate to feed and jump to this specific video
+  navigateTo(`/?video=${video.id}`)
 }
 
 const handleDeleteVideo = async (video: Video) => {

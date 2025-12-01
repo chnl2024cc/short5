@@ -92,30 +92,40 @@ def fix_master_playlist(playlist_path: Path) -> bool:
 
 def main():
     """Fix all master playlists in the processed videos directory"""
-    processed_dir = Path("/app/uploads/processed/videos")
+    # Note: This script is for legacy HLS videos. New videos use MP4 only.
+    # Check both old structure (processed/videos/) and new structure (processed/)
+    processed_dir_old = Path("/app/uploads/processed/videos")
+    processed_dir_new = Path("/app/uploads/processed")
     
-    if not processed_dir.exists():
-        print(f"Error: Processed videos directory not found: {processed_dir}")
+    processed_dirs = []
+    if processed_dir_old.exists():
+        processed_dirs.append(processed_dir_old)
+    if processed_dir_new.exists():
+        processed_dirs.append(processed_dir_new)
+    
+    if not processed_dirs:
+        print(f"Error: Processed videos directory not found")
         print("Make sure you're running this script inside the backend container")
         return
     
-    print(f"Scanning for master playlists in: {processed_dir}")
+    print(f"Scanning for master playlists...")
     print()
     
     fixed_count = 0
     skipped_count = 0
     error_count = 0
     
-    # Find all playlist.m3u8 files
-    for playlist_path in processed_dir.glob("*/playlist.m3u8"):
-        video_id = playlist_path.parent.name
-        print(f"Processing video: {video_id}")
-        
-        if fix_master_playlist(playlist_path):
-            fixed_count += 1
-        else:
-            error_count += 1
-        print()
+    # Find all playlist.m3u8 files in both old and new locations
+    for processed_dir in processed_dirs:
+        for playlist_path in processed_dir.glob("*/playlist.m3u8"):
+            video_id = playlist_path.parent.name
+            print(f"Processing video: {video_id}")
+            
+            if fix_master_playlist(playlist_path):
+                fixed_count += 1
+            else:
+                error_count += 1
+            print()
     
     print(f"Summary:")
     print(f"  Fixed: {fixed_count}")

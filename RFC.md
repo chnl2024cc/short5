@@ -81,7 +81,7 @@ Ziel: **schnelles MVP**, skalierbar, modular erweiterbar, mit Tinder-artiger Swi
 
 - Docker Container, CPU-intensive Verarbeitung  
 - Aufgaben:  
-  - Transcoding → HLS + mp4  
+  - Transcoding → MP4  
   - Thumbnail + Preview erstellen  
   - Status Update DB → `ready`  
 - Triggered über Queue (Celery/RQ)  
@@ -99,7 +99,7 @@ id | username | email | password_hash | created_at
 **Videos**
 
 ```sql
-id | user_id | title | description | status | url_hls | url_mp4 | thumbnail | created_at
+id | user_id | title | description | status | url_mp4 | thumbnail | created_at
 ```
 
 **Likes / Swipes**
@@ -125,7 +125,7 @@ id | video_id | user_id | watched_seconds | created_at
 ### Storage / CDN
 
 * Videos auf S3 / Cloudflare R2
-* HLS Streaming für Mobile / Edge Delivery
+* MP4 Streaming mit standard Video-Tag
 * Preload für nächste Videos im Frontend
 
 ---

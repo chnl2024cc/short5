@@ -167,7 +167,7 @@ const processingMessage = computed(() => {
   if (status.value === 'processing') {
     const elapsed = (Date.now() - startTime.value) / 1000
     if (elapsed < 10) return 'Validating video file...'
-    if (elapsed < 30) return 'Transcoding to HLS format...'
+    if (elapsed < 30) return 'Transcoding to MP4 format...'
     if (elapsed < 50) return 'Generating thumbnails...'
     return 'Finalizing video...'
   }

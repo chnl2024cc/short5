@@ -5,7 +5,7 @@
 **Video Worker (FFmpeg):**
 - Docker Container, CPU-intensive processing
 - Tasks:
-  - Transcoding → HLS + mp4
+  - Transcoding → MP4 output
   - Thumbnail + Preview creation
   - Status Update DB → `ready`
 - Triggered via Queue (Celery/RQ)
@@ -49,8 +49,8 @@
 1. User uploads video → Backend saves file → Creates DB record (status: `uploading`)
 2. Backend sends Celery task to Redis queue
 3. Video Worker picks up task from queue
-4. Video Worker processes video (HLS + thumbnail)
-5. Video Worker updates DB (status: `ready`, sets `url_hls`, `thumbnail`)
+4. Video Worker processes video (MP4 + thumbnail)
+5. Video Worker updates DB (status: `ready`, sets `url_mp4`, `thumbnail`)
 6. Frontend can now display processed video
 
 ## Solution

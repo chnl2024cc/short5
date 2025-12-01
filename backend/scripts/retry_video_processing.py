@@ -42,7 +42,7 @@ async def retry_stuck_videos():
             else:
                 file_ext = ".mp4"  # Default
             
-            file_path = Path(f"/app/uploads/{video.id}{file_ext}")
+            file_path = Path(f"/app/uploads/originals/{video.id}{file_ext}")
             
             # Check if file exists
             if file_path.exists():

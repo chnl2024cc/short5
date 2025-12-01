@@ -40,7 +40,7 @@ async def fix_video_processing(video_id: str):
         else:
             file_ext = ".mp4"  # Default
         
-        file_path = Path(f"/app/uploads/{video.id}{file_ext}")
+        file_path = Path(f"/app/uploads/originals/{video.id}{file_ext}")
         
         # Check if file exists
         if not file_path.exists():

@@ -32,9 +32,15 @@ from app.services.video_deletion import video_deletion_service
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Upload directory - use absolute path for container compatibility
+# Upload directories - clear structure
 UPLOAD_DIR = Path("/app/uploads")
+ORIGINALS_DIR = UPLOAD_DIR / "originals"  # Original uploaded files
+PROCESSED_DIR = UPLOAD_DIR / "processed"  # Processed files (MP4, thumbnails)
+
+# Ensure directories exist
 UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+ORIGINALS_DIR.mkdir(exist_ok=True, parents=True)
+PROCESSED_DIR.mkdir(exist_ok=True, parents=True)
 
 
 @router.post("/upload", status_code=status.HTTP_202_ACCEPTED)
@@ -77,9 +83,9 @@ async def upload_video(
     await db.commit()
     await db.refresh(video)
     
-    # Save file
+    # Save original file
     video_filename = f"{video.id}{file_ext}"
-    file_path = UPLOAD_DIR / video_filename
+    file_path = ORIGINALS_DIR / video_filename
     file_path.write_bytes(content)
     
     # Update video with file path
@@ -186,7 +192,6 @@ async def get_video(
         description=video.description,
         status=video.status.value,
         thumbnail=video.thumbnail,
-        url_hls=video.url_hls,
         url_mp4=video.url_mp4,
         duration_seconds=video.duration_seconds,
         error_reason=video.error_reason,  # Include error reason if video failed

@@ -191,7 +191,6 @@ Get user's liked videos (saved list).
       "title": "string",
       "description": "string",
       "thumbnail": "url",
-      "url_hls": "url",
       "url_mp4": "url",
       "user": {
         "id": "uuid",
@@ -247,7 +246,6 @@ Get video details.
   "description": "string",
   "status": "ready|processing|failed",
   "thumbnail": "url",
-  "url_hls": "url|null",
   "url_mp4": "url|null",
   "user": {
     "id": "uuid",
@@ -346,7 +344,6 @@ Get personalized video feed (cursor-based pagination).
       "title": "string",
       "description": "string",
       "thumbnail": "url",
-      "url_hls": "url",
       "url_mp4": "url",
       "user": {
         "id": "uuid",

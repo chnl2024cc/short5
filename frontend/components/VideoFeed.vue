@@ -22,9 +22,9 @@
         v-for="(video, index) in visibleVideos"
         :key="video.id"
         :video="video"
-        :is-active="index === currentIndex"
+        :is-active="index === 0"
         class="absolute inset-0"
-        :style="{ zIndex: videos.length - index }"
+        :style="{ zIndex: videos.length - (currentIndex + index) }"
         @swiped="handleSwipe"
         @view-update="handleViewUpdate"
         @error="handleVideoError"
@@ -39,6 +39,7 @@ import { useVideosStore } from '~/stores/videos'
 import { useApi } from '~/composables/useApi'
 import type { Video, FeedResponse } from '~/types/video'
 
+const route = useRoute()
 const videosStore = useVideosStore()
 const api = useApi()
 
@@ -48,11 +49,38 @@ const loading = ref(false)
 const nextCursor = ref<string | null>(null)
 const hasMore = ref(true)
 const preloadCount = 2 // Preload next 2 videos
+const targetVideoId = ref<string | null>(null)
+const searchAttempts = ref(0)
+const maxSearchAttempts = 10 // Maximum number of feed loads to search for target video
 
 const visibleVideos = computed(() => {
   // Show current video + next preloadCount videos
   return videos.value.slice(currentIndex.value, currentIndex.value + preloadCount + 1)
 })
+
+const loadTargetVideo = async (videoId: string) => {
+  try {
+    // Try to fetch the video directly by ID
+    const video = await videosStore.getVideoStatus(videoId)
+    
+    // Check if video is ready and has MP4
+    if (video && video.status === 'ready' && video.url_mp4) {
+      // Insert at the beginning of the feed
+      videos.value.unshift(video)
+      currentIndex.value = 0
+      targetVideoId.value = null
+      searchAttempts.value = 0
+      console.log(`Loaded target video directly: ${videoId}`)
+      return true
+    } else {
+      console.warn(`Video ${videoId} is not ready or has no MP4: status=${video?.status}, url_mp4=${video?.url_mp4}`)
+      return false
+    }
+  } catch (error) {
+    console.error(`Failed to load target video ${videoId}:`, error)
+    return false
+  }
+}
 
 const loadFeed = async (cursor?: string) => {
   if (loading.value || (!hasMore.value && cursor)) return
@@ -65,13 +93,62 @@ const loadFeed = async (cursor?: string) => {
       // Append to existing videos
       videos.value.push(...response.videos)
     } else {
-      // Replace videos
+      // Replace videos, but preserve target video if it was loaded directly
+      const routeVideoId = route.query.video as string | undefined
+      const targetVideo = routeVideoId 
+        ? videos.value.find(v => v.id === routeVideoId)
+        : null
+      
       videos.value = response.videos
-      currentIndex.value = 0
+      
+      // If we had a target video loaded directly, make sure it's still in the list
+      if (targetVideo && !videos.value.find(v => v.id === targetVideo.id)) {
+        videos.value.unshift(targetVideo)
+        currentIndex.value = 0 // Target video is at index 0
+      } else {
+        currentIndex.value = 0
+      }
     }
     
     nextCursor.value = response.next_cursor
     hasMore.value = response.has_more
+    
+    // Check if we're looking for a specific video (from route query or targetVideoId)
+    const routeVideoId = route.query.video as string | undefined
+    const searchVideoId = targetVideoId.value || routeVideoId
+    
+    if (searchVideoId) {
+      const targetIndex = videos.value.findIndex(v => v.id === searchVideoId)
+      if (targetIndex >= 0) {
+        // Found the target video!
+        // If it's not at index 0, move it there so it plays immediately
+        if (targetIndex !== 0) {
+          const targetVideo = videos.value[targetIndex]
+          if (targetVideo) {
+            videos.value.splice(targetIndex, 1)
+            videos.value.unshift(targetVideo)
+          }
+        }
+        currentIndex.value = 0
+        targetVideoId.value = null // Clear target
+        searchAttempts.value = 0
+      } else if (hasMore.value && searchAttempts.value < maxSearchAttempts) {
+        // Not found yet, keep searching
+        searchAttempts.value++
+        await loadFeed(nextCursor.value || undefined)
+        return
+      } else {
+        // Not found in feed - try to load it directly
+        console.log(`Video ${searchVideoId} not found in feed, trying to load directly...`)
+        const loaded = await loadTargetVideo(searchVideoId)
+        if (!loaded) {
+          // Video might not be ready or user has already voted on it
+          console.warn(`Could not load target video ${searchVideoId}`)
+          targetVideoId.value = null
+          searchAttempts.value = 0
+        }
+      }
+    }
     
     // Preload next videos if needed
     if (hasMore.value && videos.value.length - currentIndex.value < preloadCount + 1) {
@@ -129,10 +206,67 @@ const handleVideoError = (error: Error) => {
   }
 }
 
+// Function to ensure target video is active
+const ensureTargetVideoActive = async () => {
+  const routeVideoId = route.query.video as string | undefined
+  if (!routeVideoId) return
+  
+  // Check if video is already in the list
+  const targetVideo = videos.value.find(v => v.id === routeVideoId)
+  if (targetVideo) {
+    const targetIndex = videos.value.indexOf(targetVideo)
+    // Move to index 0 if not already there
+    if (targetIndex !== 0) {
+      videos.value.splice(targetIndex, 1)
+      videos.value.unshift(targetVideo)
+    }
+    currentIndex.value = 0
+    return
+  }
+  
+  // Try to load it directly
+  const loaded = await loadTargetVideo(routeVideoId)
+  if (loaded) {
+    currentIndex.value = 0
+  } else {
+    // Set target for feed search
+    targetVideoId.value = routeVideoId
+  }
+}
+
 // Load feed on mount
-onMounted(() => {
-  loadFeed()
+onMounted(async () => {
+  // Check if there's a video query parameter
+  const videoId = route.query.video as string | undefined
+  if (videoId) {
+    targetVideoId.value = videoId
+    // Try to load the target video directly first
+    const loaded = await loadTargetVideo(videoId)
+    if (!loaded) {
+      // If direct load fails, it will be searched in the feed
+      console.log(`Direct load failed, will search in feed for: ${videoId}`)
+    } else {
+      // Video loaded, ensure it's active
+      currentIndex.value = 0
+    }
+  }
+  // Load the feed (will search for target video if not already loaded)
+  await loadFeed()
+  
+  // After feed loads, ensure target video is active
+  await ensureTargetVideoActive()
 })
+
+// Watch for route query changes (e.g., user navigates with different video ID)
+watch(
+  () => route.query.video,
+  async (newVideoId) => {
+    if (newVideoId) {
+      targetVideoId.value = newVideoId as string
+      await ensureTargetVideoActive()
+    }
+  }
+)
 
 // Watch for when we need to load more
 watch(

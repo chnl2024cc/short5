@@ -43,28 +43,26 @@ Processes in: /tmp/video_processing/{video_id}/ (temp volume)
   ↓
 Stores processed files: /app/uploads/processed/videos/{video_id}/
   ↓
-Updates database: url_hls="/uploads/processed/videos/{video_id}/playlist.m3u8"
+Updates database: url_mp4="/uploads/processed/videos/{video_id}/video.mp4"
 ```
 
 **Key Points:**
 - Input file: `/app/uploads/{video_id}.mp4` (shared volume)
 - Temp processing: `/tmp/video_processing/{video_id}/` (temp volume)
 - Output storage: `/app/uploads/processed/videos/{video_id}/` (shared volume)
-- Directory structure preserved for HLS playlists
+- Standardized outputs: `video.mp4`, `thumbnail.jpg`
 
 ### 3. Serving (Backend)
 ```
-GET http://localhost:8000/uploads/processed/videos/{video_id}/playlist.m3u8
+GET http://localhost:8000/uploads/processed/videos/{video_id}/video.mp4
   ↓
-Backend serves from: /app/uploads/processed/videos/{video_id}/playlist.m3u8
-  ↓
-HLS playlist loads segments: 720p/{video_id}_001.ts (relative paths work!)
+Backend serves from: /app/uploads/processed/videos/{video_id}/video.mp4
 ```
 
 **Location:** `backend/app/main.py:45-48`
 - Static files mounted at `/uploads`
 - Serves entire `/app/uploads` directory tree
-- HLS relative paths resolve correctly
+- MP4 URLs are directly accessible
 
 ## Directory Structure ✅
 
@@ -76,22 +74,8 @@ HLS playlist loads segments: 720p/{video_id}_001.ts (relative paths work!)
 └── processed/
     └── videos/
         └── {video_id}/
-            ├── playlist.m3u8         # Master playlist
-            │   └── References: 720p/{video_id}.m3u8
-            │                   480p/{video_id}.m3u8
-            │
-            ├── thumbnail.jpg
-            │
-            ├── 720p/
-            │   ├── {video_id}.m3u8   # Quality playlist
-            │   │   └── References: {video_id}_001.ts (relative)
-            │   └── {video_id}_001.ts # Video segments
-            │   └── {video_id}_002.ts
-            │   └── ...
-            │
-            └── 480p/
-                ├── {video_id}.m3u8
-                └── {video_id}_*.ts
+            ├── video.mp4
+            └── thumbnail.jpg
 ```
 
 ## Path Consistency ✅
@@ -117,7 +101,7 @@ All paths use absolute paths for container compatibility:
 - ✅ All paths are absolute (`/app/uploads/...`)
 - ✅ Backend sends absolute path to video worker
 - ✅ Video worker handles absolute paths correctly
-- ✅ Directory structure preserved for HLS
+- ✅ Standardized filenames simplify serving
 
 ### File Access
 - ✅ Backend can write uploaded files
@@ -125,11 +109,10 @@ All paths use absolute paths for container compatibility:
 - ✅ Video worker can write processed files (shared volume)
 - ✅ Backend can serve processed files
 
-### HLS Compatibility
-- ✅ Master playlist: `/uploads/processed/videos/{video_id}/playlist.m3u8`
-- ✅ Quality playlists: `720p/{video_id}.m3u8` (relative paths)
-- ✅ Segments: `{video_id}_001.ts` (relative paths)
-- ✅ All paths resolve correctly
+### Playback Compatibility
+- ✅ MP4 URLs: `/uploads/processed/videos/{video_id}/video.mp4`
+- ✅ Thumbnails: `/uploads/processed/videos/{video_id}/thumbnail.jpg`
+- ✅ Works with native HTML5 video element across browsers
 
 ## Testing
 

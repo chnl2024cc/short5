@@ -46,7 +46,6 @@ class VideoDeletionService:
         
         # 1. Collect video URLs before deletion
         video_urls = {
-            "url_hls": video.url_hls,
             "url_mp4": video.url_mp4,
             "thumbnail": video.thumbnail,
         }

@@ -82,7 +82,7 @@ The video worker now supports **development mode** that works without S3 credent
 4. **Check database for video status:**
    ```bash
    docker-compose exec postgres psql -U short5_user -d short5_db
-   > SELECT id, status, url_hls, thumbnail FROM videos ORDER BY created_at DESC LIMIT 5;
+   > SELECT id, status, url_mp4, thumbnail FROM videos ORDER BY created_at DESC LIMIT 5;
    ```
 
 ## Troubleshooting
