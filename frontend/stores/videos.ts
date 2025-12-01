@@ -184,20 +184,92 @@ export const useVideosStore = defineStore('videos', {
     },
 
     async fetchLikedVideos(cursor?: string): Promise<FeedResponse> {
-      const api = useApi()
-      try {
-        const response = await api.get<FeedResponse>(`/users/me/liked${cursor ? `?cursor=${cursor}` : ''}`)
-        
-        if (cursor) {
-          this.likedVideos.push(...response.videos)
-        } else {
-          this.likedVideos = response.videos
+      const authStore = useAuthStore()
+      
+      // If authenticated, fetch from API
+      if (authStore.isAuthenticated) {
+        const api = useApi()
+        try {
+          const response = await api.get<FeedResponse>(`/users/me/liked${cursor ? `?cursor=${cursor}` : ''}`)
+          
+          if (cursor) {
+            this.likedVideos.push(...response.videos)
+          } else {
+            this.likedVideos = response.videos
+          }
+          
+          return response
+        } catch (error) {
+          console.error('Failed to fetch liked videos:', error)
+          throw error
         }
-        
-        return response
-      } catch (error) {
-        console.error('Failed to fetch liked videos:', error)
-        throw error
+      }
+      
+      // If not authenticated, get liked videos from localStorage
+      if (!process.client) {
+        return { videos: [], next_cursor: null, has_more: false }
+      }
+      
+      const pendingVotes = this.getPendingVotes()
+      const likedVideoIds = pendingVotes
+        .filter(vote => vote.direction === 'like')
+        .map(vote => vote.videoId)
+      
+      if (likedVideoIds.length === 0) {
+        return { videos: [], next_cursor: null, has_more: false }
+      }
+      
+      // Fetch video details for liked video IDs
+      // We'll fetch from the feed and filter, or create a batch endpoint
+      // For now, let's fetch individual videos
+      const api = useApi()
+      const videos: Video[] = []
+      const errors: string[] = []
+      
+      // Fetch videos in batches to avoid too many requests
+      const batchSize = 10
+      for (let i = 0; i < likedVideoIds.length; i += batchSize) {
+        const batch = likedVideoIds.slice(i, i + batchSize)
+        await Promise.all(
+          batch.map(async (videoId) => {
+            try {
+              const video = await api.get<Video>(`/videos/${videoId}`)
+              videos.push(video)
+            } catch (error) {
+              console.warn(`Failed to fetch video ${videoId}:`, error)
+              errors.push(videoId)
+            }
+          })
+        )
+      }
+      
+      // Sort by timestamp (most recently liked first)
+      const voteMap = new Map(pendingVotes.map(v => [v.videoId, v]))
+      videos.sort((a, b) => {
+        const voteA = voteMap.get(a.id)
+        const voteB = voteMap.get(b.id)
+        if (!voteA || !voteB) return 0
+        return voteB.timestamp - voteA.timestamp // Most recent first
+      })
+      
+      // Apply pagination (simple client-side pagination)
+      const pageSize = 20
+      const startIndex = cursor ? parseInt(cursor) || 0 : 0
+      const endIndex = startIndex + pageSize
+      const paginatedVideos = videos.slice(startIndex, endIndex)
+      const hasMore = endIndex < videos.length
+      const nextCursor = hasMore ? endIndex.toString() : null
+      
+      if (!cursor) {
+        this.likedVideos = paginatedVideos
+      } else {
+        this.likedVideos.push(...paginatedVideos)
+      }
+      
+      return {
+        videos: paginatedVideos,
+        next_cursor: nextCursor,
+        has_more: hasMore,
       }
     },
 

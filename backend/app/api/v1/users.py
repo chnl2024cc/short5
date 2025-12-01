@@ -9,9 +9,9 @@ import logging
 from pydantic import ValidationError
 
 from app.core.database import get_db
-from app.api.v1.dependencies import get_current_user_required
+from app.api.v1.dependencies import get_current_user_required, get_current_user
 from app.models.user import User
-from app.models.video import Video
+from app.models.video import Video, VideoStatus
 from app.models.vote import Vote
 from app.models.view import View
 from app.schemas.video import VideoResponse, UserBasic, VideoStats
@@ -179,80 +179,165 @@ async def get_user_profile(
 
 @router.get("/me/liked")
 async def get_liked_videos(
-    current_user: User = Depends(get_current_user_required),
+    current_user: Optional[User] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     cursor: Optional[str] = None,
     limit: int = 20,
 ):
-    """Get user's liked videos - videos the user has voted with direction 'like'"""
+    """
+    Get user's liked videos (if authenticated) or popular/most-liked videos (if unauthenticated)
+    - Authenticated: videos the user has voted with direction 'like'
+    - Unauthenticated: videos with the most likes (trending/popular)
+    """
     
-    # Query videos where user has voted with direction "like"
-    query = (
-        select(Video, User, Vote)
-        .join(Vote, Video.id == Vote.video_id)
-        .join(User, Video.user_id == User.id)
-        .where(
-            Vote.user_id == current_user.id,
-            cast(Vote.direction, String) == "like"
-        )
-        .order_by(Vote.created_at.desc())
-    )
-    
-    if cursor:
-        # Parse cursor (ISO format datetime string)
-        try:
-            from datetime import datetime
-            cursor_time = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
-            query = query.where(Vote.created_at < cursor_time)
-        except Exception:
-            # If cursor parsing fails, ignore it
-            pass
-    
-    query = query.limit(min(limit, 100))
-    
-    result = await db.execute(query)
-    rows = result.all()
-    
-    videos = []
-    for video, user, vote in rows:
-        # Get stats
-        likes_count = await db.execute(
-            select(func.count(Vote.id)).where(
-                Vote.video_id == video.id, cast(Vote.direction, String) == "like"
+    if current_user:
+        # Authenticated user: show their liked videos
+        query = (
+            select(Video, User, Vote)
+            .join(Vote, Video.id == Vote.video_id)
+            .join(User, Video.user_id == User.id)
+            .where(
+                Vote.user_id == current_user.id,
+                cast(Vote.direction, String) == "like"
             )
-        )
-        not_likes_count = await db.execute(
-            select(func.count(Vote.id)).where(
-                Vote.video_id == video.id, cast(Vote.direction, String) == "not_like"
-            )
-        )
-        views_count = await db.execute(
-            select(func.count(View.id)).where(View.video_id == video.id)
+            .order_by(Vote.created_at.desc())
         )
         
-        videos.append(
-            VideoResponse(
-                id=str(video.id),
-                title=video.title,
-                description=video.description,
-                status=video.status.value,
-                thumbnail=video.thumbnail,
-                url_mp4=video.url_mp4,
-                duration_seconds=video.duration_seconds,
-                error_reason=video.error_reason,  # Include error reason if video failed
-                user=UserBasic(id=str(user.id), username=user.username),
-                stats=VideoStats(
-                    likes=likes_count.scalar() or 0,
-                    not_likes=not_likes_count.scalar() or 0,
-                    views=views_count.scalar() or 0,
-                ),
-                created_at=video.created_at,
+        if cursor:
+            # Parse cursor (ISO format datetime string)
+            try:
+                from datetime import datetime
+                cursor_time = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+                query = query.where(Vote.created_at < cursor_time)
+            except Exception:
+                # If cursor parsing fails, ignore it
+                pass
+        
+        query = query.limit(min(limit, 100))
+        
+        result = await db.execute(query)
+        rows = result.all()
+        
+        videos = []
+        for video, user, vote in rows:
+            # Get stats
+            likes_count = await db.execute(
+                select(func.count(Vote.id)).where(
+                    Vote.video_id == video.id, cast(Vote.direction, String) == "like"
+                )
             )
+            not_likes_count = await db.execute(
+                select(func.count(Vote.id)).where(
+                    Vote.video_id == video.id, cast(Vote.direction, String) == "not_like"
+                )
+            )
+            views_count = await db.execute(
+                select(func.count(View.id)).where(View.video_id == video.id)
+            )
+            
+            videos.append(
+                VideoResponse(
+                    id=str(video.id),
+                    title=video.title,
+                    description=video.description,
+                    status=video.status.value,
+                    thumbnail=video.thumbnail,
+                    url_mp4=video.url_mp4,
+                    duration_seconds=video.duration_seconds,
+                    error_reason=video.error_reason,  # Include error reason if video failed
+                    user=UserBasic(id=str(user.id), username=user.username),
+                    stats=VideoStats(
+                        likes=likes_count.scalar() or 0,
+                        not_likes=not_likes_count.scalar() or 0,
+                        views=views_count.scalar() or 0,
+                    ),
+                    created_at=video.created_at,
+                )
+            )
+        
+        # Use Vote.created_at for cursor (when the user liked it)
+        next_cursor = rows[-1][2].created_at.isoformat() if rows else None
+        has_more = len(rows) == limit
+    else:
+        # Unauthenticated user: show popular/most-liked videos (trending)
+        # Query videos ordered by number of likes (most liked first)
+        subquery = (
+            select(
+                Video.id,
+                func.count(Vote.id).filter(cast(Vote.direction, String) == "like").label("like_count")
+            )
+            .outerjoin(Vote, Video.id == Vote.video_id)
+            .where(
+                Video.status == VideoStatus.READY,
+                Video.url_mp4.isnot(None),
+                Video.url_mp4 != ""
+            )
+            .group_by(Video.id)
+            .subquery()
         )
-    
-    # Use Vote.created_at for cursor (when the user liked it)
-    next_cursor = rows[-1][2].created_at.isoformat() if rows else None
-    has_more = len(rows) == limit
+        
+        query = (
+            select(Video, User, subquery.c.like_count)
+            .join(User, Video.user_id == User.id)
+            .join(subquery, Video.id == subquery.c.id)
+            .order_by(subquery.c.like_count.desc(), Video.created_at.desc())
+        )
+        
+        if cursor:
+            # Parse cursor (ISO format datetime string)
+            try:
+                from datetime import datetime
+                cursor_time = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+                query = query.where(Video.created_at < cursor_time)
+            except Exception:
+                # If cursor parsing fails, ignore it
+                pass
+        
+        query = query.limit(min(limit, 100))
+        
+        result = await db.execute(query)
+        rows = result.all()
+        
+        videos = []
+        for video, user, like_count in rows:
+            # Get stats
+            likes_count = await db.execute(
+                select(func.count(Vote.id)).where(
+                    Vote.video_id == video.id, cast(Vote.direction, String) == "like"
+                )
+            )
+            not_likes_count = await db.execute(
+                select(func.count(Vote.id)).where(
+                    Vote.video_id == video.id, cast(Vote.direction, String) == "not_like"
+                )
+            )
+            views_count = await db.execute(
+                select(func.count(View.id)).where(View.video_id == video.id)
+            )
+            
+            videos.append(
+                VideoResponse(
+                    id=str(video.id),
+                    title=video.title,
+                    description=video.description,
+                    status=video.status.value,
+                    thumbnail=video.thumbnail,
+                    url_mp4=video.url_mp4,
+                    duration_seconds=video.duration_seconds,
+                    error_reason=video.error_reason,
+                    user=UserBasic(id=str(user.id), username=user.username),
+                    stats=VideoStats(
+                        likes=likes_count.scalar() or 0,
+                        not_likes=not_likes_count.scalar() or 0,
+                        views=views_count.scalar() or 0,
+                    ),
+                    created_at=video.created_at,
+                )
+            )
+        
+        # Use Video.created_at for cursor (for unauthenticated users)
+        next_cursor = rows[-1][0].created_at.isoformat() if rows else None
+        has_more = len(rows) == limit
     
     return {
         "videos": videos,

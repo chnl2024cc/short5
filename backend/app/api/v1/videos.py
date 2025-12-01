@@ -33,6 +33,59 @@ from app.services.video_deletion import video_deletion_service
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+@router.get("/{video_id}", response_model=VideoResponse)
+async def get_video(
+    video_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Get a single video by ID (public endpoint, no authentication required)"""
+    result = await db.execute(select(Video, User).join(User, Video.user_id == User.id).where(Video.id == video_id))
+    row = result.first()
+    
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Video not found",
+        )
+    
+    video, user = row
+    
+    # Get stats
+    likes_count = await db.execute(
+        select(func.count(Vote.id)).where(
+            Vote.video_id == video.id, cast(Vote.direction, String) == "like"
+        )
+    )
+    not_likes_count = await db.execute(
+        select(func.count(Vote.id)).where(
+            Vote.video_id == video.id, cast(Vote.direction, String) == "not_like"
+        )
+    )
+    views_count = await db.execute(
+        select(func.count(View.id)).where(View.video_id == video.id)
+    )
+    
+    return VideoResponse(
+        id=str(video.id),
+        title=video.title,
+        description=video.description,
+        status=video.status.value,
+        thumbnail=video.thumbnail,
+        url_mp4=video.url_mp4,
+        duration_seconds=video.duration_seconds,
+        error_reason=video.error_reason,
+        user=UserBasic(id=str(user.id), username=user.username),
+        stats=VideoStats(
+            likes=likes_count.scalar() or 0,
+            not_likes=not_likes_count.scalar() or 0,
+            views=views_count.scalar() or 0,
+        ),
+        created_at=video.created_at,
+    )
+
+
 # Upload directories - clear structure
 UPLOAD_DIR = Path("/app/uploads")
 ORIGINALS_DIR = UPLOAD_DIR / "originals"  # Original uploaded files

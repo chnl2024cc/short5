@@ -175,9 +175,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 
-definePageMeta({
-  middleware: 'auth',
-})
+// No auth middleware - allow unauthenticated users to see their localStorage liked videos
 
 const videosStore = useVideosStore()
 
@@ -245,10 +243,9 @@ const loadMore = () => {
 }
 
 const playVideo = (video: any) => {
-  // Navigate to a video detail page or play in modal
-  // For now, we'll just navigate back to feed
-  // In the future, could add a video detail/player page
-  navigateTo('/')
+  // Navigate to the feed starting at this specific video
+  // The VideoFeed component will detect the ?video query param and jump to that video
+  navigateTo(`/?video=${video.id}`)
 }
 
 // Infinite scroll using Intersection Observer
