@@ -21,8 +21,8 @@ export interface Video {
   title?: string
   description?: string
   status: VideoStatus
-  thumbnail?: string | null
-  url_mp4?: string | null
+  thumbnail: string // Required - fail fast if missing
+  url_mp4: string // Required - fail fast if missing
   duration_seconds?: number | null
   error_reason?: string | null
   user: VideoUser

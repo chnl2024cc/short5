@@ -40,9 +40,9 @@
 
     <!-- Video Thumbnail Placeholder -->
     <div
-      v-if="video.thumbnail && (isLoading || hasError)"
+      v-if="isLoading || hasError"
       class="absolute inset-0 bg-cover bg-center"
-      :style="{ backgroundImage: `url(${getAbsoluteUrl(video.thumbnail) || ''})` }"
+      :style="{ backgroundImage: `url(${getAbsoluteUrl(video.thumbnail)})` }"
     >
       <div class="absolute inset-0 bg-black/40"></div>
     </div>
@@ -105,8 +105,11 @@ const config = useRuntimeConfig()
 const backendBaseUrl = config.public.backendBaseUrl || 'http://localhost:8000'
 
 // Helper to convert relative URLs to absolute URLs
-const getAbsoluteUrl = (url: string | null | undefined): string | null => {
-  if (!url) return null
+const getAbsoluteUrl = (url: string): string => {
+  // Fail fast if URL is missing (should never happen with required fields)
+  if (!url) {
+    throw new Error('URL is required but was missing')
+  }
   // If already absolute (starts with http:// or https://), return as-is
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url
@@ -286,19 +289,20 @@ const initializeVideo = async (retry = false) => {
   }
   
   try {
-    // Simple MP4 playback - works in all modern browsers
-    if (props.video.url_mp4) {
-      const mp4Src = getAbsoluteUrl(props.video.url_mp4)
-      if (!mp4Src) {
-        throw new Error('MP4 URL is invalid')
-      }
-      console.log(`[VideoSwiper] Loading MP4: ${mp4Src}`)
-      video.src = mp4Src
-      video.load()
-      video.addEventListener('error', handleNativeVideoError, { once: true })
-    } else {
-      throw new Error('No video URL available')
+    // Fail fast if url_mp4 is missing
+    if (!props.video.url_mp4) {
+      throw new Error(`Video ${props.video.id} is missing url_mp4 - invalid state`)
     }
+    
+    // Simple MP4 playback - works in all modern browsers
+    const mp4Src = getAbsoluteUrl(props.video.url_mp4)
+    if (!mp4Src) {
+      throw new Error('MP4 URL is invalid or could not be resolved')
+    }
+    console.log(`[VideoSwiper] Loading MP4: ${mp4Src}`)
+    video.src = mp4Src
+    video.load()
+    video.addEventListener('error', handleNativeVideoError, { once: true })
   } catch (error: any) {
     console.error('Error initializing video:', error)
     handleVideoError(error)

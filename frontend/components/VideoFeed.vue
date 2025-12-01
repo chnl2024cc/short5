@@ -63,19 +63,24 @@ const loadTargetVideo = async (videoId: string) => {
     // Try to fetch the video directly by ID
     const video = await videosStore.getVideoStatus(videoId)
     
-    // Check if video is ready and has MP4
-    if (video && video.status === 'ready' && video.url_mp4) {
-      // Insert at the beginning of the feed
-      videos.value.unshift(video)
-      currentIndex.value = 0
-      targetVideoId.value = null
-      searchAttempts.value = 0
-      console.log(`Loaded target video directly: ${videoId}`)
-      return true
-    } else {
-      console.warn(`Video ${videoId} is not ready or has no MP4: status=${video?.status}, url_mp4=${video?.url_mp4}`)
-      return false
+    // Fail fast if video is not ready or missing required fields
+    if (!video) {
+      throw new Error(`Video ${videoId} not found`)
     }
+    if (video.status !== 'ready') {
+      throw new Error(`Video ${videoId} is not ready (status: ${video.status})`)
+    }
+    if (!video.url_mp4) {
+      throw new Error(`Video ${videoId} is missing url_mp4 - invalid state`)
+    }
+    
+    // Insert at the beginning of the feed
+    videos.value.unshift(video)
+    currentIndex.value = 0
+    targetVideoId.value = null
+    searchAttempts.value = 0
+    console.log(`Loaded target video directly: ${videoId}`)
+    return true
   } catch (error) {
     console.error(`Failed to load target video ${videoId}:`, error)
     return false

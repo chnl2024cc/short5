@@ -238,30 +238,10 @@
               <!-- Thumbnail -->
               <div class="relative aspect-[9/16] bg-gray-800">
                 <img
-                  v-if="video.thumbnail"
-                  :src="getAbsoluteUrl(video.thumbnail) || ''"
+                  :src="getAbsoluteUrl(video.thumbnail)"
                   :alt="video.title || 'Video thumbnail'"
                   class="w-full h-full object-cover"
                 />
-                <div
-                  v-else
-                  class="w-full h-full flex items-center justify-center text-gray-600"
-                >
-                  <svg
-                    class="w-16 h-16"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                
                 <!-- Status Badge -->
                 <div
                   v-if="video.status && video.status !== 'ready'"
@@ -358,8 +338,11 @@ const api = useApi()
 const config = useRuntimeConfig()
 const backendBaseUrl = config.public.backendBaseUrl || 'http://localhost:8000'
 
-const getAbsoluteUrl = (url: string | null | undefined): string | null => {
-  if (!url) return null
+const getAbsoluteUrl = (url: string): string => {
+  // Fail fast if URL is missing (should never happen with required fields)
+  if (!url) {
+    throw new Error('URL is required but was missing')
+  }
   // If already absolute (starts with http:// or https://), return as-is
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url

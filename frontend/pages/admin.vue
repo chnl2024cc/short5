@@ -166,29 +166,10 @@
                 <!-- Thumbnail -->
                 <div class="relative w-full sm:w-48 h-64 sm:h-32 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
                   <img
-                    v-if="video.thumbnail"
-                    :src="getAbsoluteUrl(video.thumbnail) || ''"
+                    :src="getAbsoluteUrl(video.thumbnail)"
                     :alt="video.title || 'Video thumbnail'"
                     class="w-full h-full object-cover"
                   />
-                  <div
-                    v-else
-                    class="w-full h-full flex items-center justify-center text-gray-600"
-                  >
-                    <svg
-                      class="w-12 h-12"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </div>
                   <div
                     class="absolute top-2 left-2 bg-yellow-600 text-white text-xs px-2 py-1 rounded"
                   >
@@ -234,7 +215,6 @@
                       Reject
                     </button>
                     <a
-                      v-if="video.url_mp4"
                       :href="getAbsoluteUrl(video.url_mp4)"
                       target="_blank"
                       class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
@@ -476,8 +456,11 @@ const api = useApi()
 const config = useRuntimeConfig()
 const backendBaseUrl = config.public.backendBaseUrl || 'http://localhost:8000'
 
-const getAbsoluteUrl = (url: string | null | undefined): string | null => {
-  if (!url) return null
+const getAbsoluteUrl = (url: string): string => {
+  // Fail fast if URL is missing (should never happen with required fields)
+  if (!url) {
+    throw new Error('URL is required but was missing')
+  }
   // If already absolute (starts with http:// or https://), return as-is
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url
