@@ -2,11 +2,22 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies needed for Python packages
+# Including build tools and libraries for cryptography, bcrypt, and PostgreSQL
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     gcc \
+    g++ \
+    libpq-dev \
     postgresql-client \
+    libssl-dev \
+    libffi-dev \
+    python3-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip to latest version
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
