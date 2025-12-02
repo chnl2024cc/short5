@@ -57,7 +57,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       # CORS origins - should include frontend URL
-      CORS_ORIGINS: ${CORS_ORIGINS:-${SERVICE_URL_FRONTEND}}
+      CORS_ORIGINS: ${SERVICE_URL_FRONTEND},${SERVICE_URL_FRONTEND}
     volumes:
       - backend_uploads:/app/uploads
     depends_on:
@@ -129,8 +129,8 @@ services:
       args:
         # Build arguments - use .env variables or Coolify's SERVICE_URL_BACKEND
         # These are baked into the build and cannot be changed at runtime
-        NUXT_PUBLIC_API_BASE_URL: ${NUXT_PUBLIC_API_BASE_URL:-${SERVICE_URL_BACKEND}/api/v1}
-        NUXT_PUBLIC_BACKEND_BASE_URL: ${NUXT_PUBLIC_BACKEND_BASE_URL:-${SERVICE_URL_BACKEND}}
+        NUXT_PUBLIC_API_BASE_URL: ${SERVICE_URL_BACKEND}/api/v1
+        NUXT_PUBLIC_BACKEND_BASE_URL: ${SERVICE_URL_BACKEND}
         NODE_ENV: ${NODE_ENV:-production}
     container_name: short5_frontend
     environment:
