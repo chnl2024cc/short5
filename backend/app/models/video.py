@@ -27,7 +27,7 @@ class VideoStatusType(TypeDecorator):
         super().__init__(
             'uploading', 'processing', 'ready', 'failed', 'rejected',
             name='video_status',
-            create_type=False
+            create_type=True
         )
     
     def process_bind_param(self, value, dialect):

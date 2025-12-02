@@ -23,7 +23,7 @@ class Vote(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     video_id = Column(UUID(as_uuid=True), ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, index=True)
     direction = Column(
-        ENUM(VoteDirection, name="vote_direction", create_type=False, values_callable=lambda obj: [e.value for e in obj]),
+        ENUM(VoteDirection, name="vote_direction", create_type=True, values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
         index=True
     )

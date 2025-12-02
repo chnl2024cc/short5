@@ -53,10 +53,16 @@ class Settings(BaseSettings):
     def validate_production_settings(self):
         """Validate that production/staging environments have proper configuration"""
         if self.ENVIRONMENT in ("production", "staging"):
-            if self.BACKEND_BASE_URL == "http://localhost:8000":
+            # Check if BACKEND_BASE_URL is empty, localhost, or not properly set
+            if (not self.BACKEND_BASE_URL or 
+                self.BACKEND_BASE_URL.strip() == "" or
+                "localhost" in self.BACKEND_BASE_URL.lower() or
+                "127.0.0.1" in self.BACKEND_BASE_URL):
                 raise ValueError(
                     f"BACKEND_BASE_URL must be set via environment variable in {self.ENVIRONMENT} environment. "
-                    "Using localhost default is not allowed in production/staging."
+                    f"Current value: '{self.BACKEND_BASE_URL}'. "
+                    "Using localhost or empty value is not allowed in production/staging. "
+                    "Please set BACKEND_BASE_URL to your production backend URL (e.g., https://api.yourdomain.com)."
                 )
         return self
     
