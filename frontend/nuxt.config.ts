@@ -1,12 +1,16 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+const isProduction = process.env.NODE_ENV === 'production'
+
 export default defineNuxtConfig({
   compatibilityDate: '2024-04-03',
-  devtools: { enabled: process.env.NODE_ENV !== 'production' },
+  devtools: { enabled: !isProduction },
   
   modules: [
     '@nuxt/ui',
     '@pinia/nuxt',
     '@vueuse/nuxt',
+    // Only load devtools in development - completely exclude in production
+    ...(!isProduction ? ['@nuxt/devtools'] : []),
   ],
 
   css: ['~/assets/css/main.css'],
@@ -48,8 +52,14 @@ export default defineNuxtConfig({
 
   vite: {
     build: {
-      sourcemap: process.env.NODE_ENV === 'development',
+      sourcemap: !isProduction,
     },
+    // Explicitly disable devtools-related plugins in production
+    ...(isProduction && {
+      server: {
+        hmr: false,
+      },
+    }),
   },
 })
 

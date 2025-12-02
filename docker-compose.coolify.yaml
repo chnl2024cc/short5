@@ -127,24 +127,31 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Pass build arguments for runtime config (required at build time for Nuxt)
+        # Build arguments - required at build time for Nuxt public runtime config
+        # These are baked into the build and cannot be changed at runtime
         NUXT_PUBLIC_API_BASE_URL: ${SERVICE_URL_BACKEND}/api/v1
         NUXT_PUBLIC_BACKEND_BASE_URL: ${SERVICE_URL_BACKEND}
+        NODE_ENV: production
     container_name: short5_frontend
     environment:
-      # Runtime environment variables (also set at build time via args)
-      NUXT_PUBLIC_API_BASE_URL: ${SERVICE_URL_BACKEND}/api/v1
-      NUXT_PUBLIC_BACKEND_BASE_URL: ${SERVICE_URL_BACKEND}
+      # Runtime environment variables
       NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      NUXT_TELEMETRY_DISABLED: 1
+      # Note: NUXT_PUBLIC_* variables are build-time only in Nuxt 3/4
+      # They must be set via build args above
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      # Use Node.js for health check (available in the image)
+      # Checks if the server responds with HTTP 200
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    # Note: wget is available in node:alpine, or use: node -e "require('http').get('http://localhost:3000')"
     restart: unless-stopped
 
 volumes:
