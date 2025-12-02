@@ -14,8 +14,8 @@ ARG NUXT_PUBLIC_API_BASE_URL
 ARG NUXT_PUBLIC_BACKEND_BASE_URL
 
 # Set build-time environment variables (fallback to defaults if not provided)
-ENV NUXT_PUBLIC_API_BASE_URL=${NUXT_PUBLIC_API_BASE_URL:-https://api.example.com/api/v1}
-ENV NUXT_PUBLIC_BACKEND_BASE_URL=${NUXT_PUBLIC_BACKEND_BASE_URL:-https://api.example.com}
+ENV NUXT_PUBLIC_API_BASE_URL=${NUXT_PUBLIC_API_BASE_URL}
+ENV NUXT_PUBLIC_BACKEND_BASE_URL=${NUXT_PUBLIC_BACKEND_BASE_URL}
 ENV NODE_ENV=production
 
 # Verify environment variables are set (for debugging)
