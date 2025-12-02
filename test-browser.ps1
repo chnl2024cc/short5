@@ -19,8 +19,29 @@ Write-Host "⚠️  IMPORTANT: This script will RESTART all Docker containers" -
 Write-Host "   Code changes require container restarts in Docker development!" -ForegroundColor Yellow
 Write-Host ""
 
-$FRONTEND_URL = "http://localhost:3000"
-$BACKEND_URL = "http://localhost:8000"
+# Load BACKEND_BASE_URL from environment or .env file, default to http://localhost:8000
+$BACKEND_BASE_URL = $env:BACKEND_BASE_URL
+if (-not $BACKEND_BASE_URL) {
+    # Try to read from .env file
+    if (Test-Path ".env") {
+        $envContent = Get-Content ".env"
+        $backendLine = $envContent | Where-Object { $_ -match '^BACKEND_BASE_URL=(.+)$' }
+        if ($backendLine) {
+            $BACKEND_BASE_URL = ($backendLine -split '=')[1].Trim()
+        }
+    }
+}
+if (-not $BACKEND_BASE_URL) {
+    $BACKEND_BASE_URL = "http://localhost:8000"
+}
+
+$FRONTEND_PORT = $env:FRONTEND_PORT
+if (-not $FRONTEND_PORT) {
+    $FRONTEND_PORT = "3000"
+}
+
+$FRONTEND_URL = "http://localhost:$FRONTEND_PORT"
+$BACKEND_URL = $BACKEND_BASE_URL
 $MAX_WAIT = 60  # Maximum wait time in seconds
 
 # Step 1: Stop all containers (CRITICAL - ensures clean state)

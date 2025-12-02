@@ -30,9 +30,15 @@ echo -e "${YELLOW}⚠️  IMPORTANT: This script will RESTART all Docker contain
 echo -e "${YELLOW}   Code changes require container restarts in Docker development!${NC}"
 echo ""
 
-# Configuration
-FRONTEND_URL="http://localhost:3000"
-BACKEND_URL="http://localhost:8000"
+# Configuration - Load from environment or .env file
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
+
+BACKEND_BASE_URL=${BACKEND_BASE_URL:-http://localhost:8000}
+FRONTEND_PORT=${FRONTEND_PORT:-3000}
+FRONTEND_URL="http://localhost:${FRONTEND_PORT}"
+BACKEND_URL="${BACKEND_BASE_URL}"
 MAX_WAIT=60  # Maximum wait time in seconds
 
 # Step 1: Stop all containers (CRITICAL - ensures clean state)

@@ -1,8 +1,9 @@
 # API Specification – Short-Video Platform
 
 ## Base URL
-- **Development:** `http://localhost:8000/api/v1`
-- **Production:** `https://api.example.com/api/v1`
+- **Development:** `${BACKEND_BASE_URL}/api/v1` (default: `http://localhost:8000/api/v1`)
+  - Configure via `BACKEND_BASE_URL` in `.env`
+- **Production:** Set `BACKEND_BASE_URL` to your production URL
 
 ## Authentication
 All authenticated endpoints require a JWT token in the Authorization header:

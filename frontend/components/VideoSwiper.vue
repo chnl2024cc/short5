@@ -127,7 +127,7 @@ import { useVideosStore } from '~/stores/videos'
 import type { Video } from '~/types/video'
 
 const config = useRuntimeConfig()
-const backendBaseUrl = config.public.backendBaseUrl || 'http://localhost:8000'
+const backendBaseUrl = config.public.backendBaseUrl
 
 // Helper to convert relative URLs to absolute URLs
 const getAbsoluteUrl = (url: string): string => {

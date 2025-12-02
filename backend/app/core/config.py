@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     
+    # Backend
+    BACKEND_BASE_URL: str = "http://localhost:8000"
+    
     # JWT
     JWT_SECRET_KEY: str = "change-me-in-production-use-strong-random-key"
     JWT_ALGORITHM: str = "HS256"

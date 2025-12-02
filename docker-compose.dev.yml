@@ -47,6 +47,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-short5_user}:${POSTGRES_PASSWORD:-short5_password}@postgres:5432/${POSTGRES_DB:-short5_db}
       REDIS_URL: redis://redis:6379/0
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-http://localhost:8000}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
       JWT_ALGORITHM: HS256
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 30
@@ -129,8 +130,8 @@ services:
       dockerfile: Dockerfile.dev
     container_name: short5_frontend
     environment:
-      NUXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
-      NUXT_PUBLIC_BACKEND_BASE_URL: http://localhost:8000  # Use localhost for browser access (not Docker internal hostname)
+      NUXT_PUBLIC_API_BASE_URL: ${BACKEND_BASE_URL}/api/v1
+      NUXT_PUBLIC_BACKEND_BASE_URL: ${BACKEND_BASE_URL}  # Use localhost for browser access (not Docker internal hostname)
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     volumes:

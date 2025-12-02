@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
+from app.core.config import settings
 from app.models.video import Video, VideoStatus
 from app.celery_app import celery_app
 
@@ -89,7 +90,7 @@ async def fix_video_processing(video_id: str):
         print("\n2. Watch video_worker logs:")
         print("   docker-compose logs -f video_worker")
         print("\n3. Check video status:")
-        print(f"   curl http://localhost:8000/api/v1/videos/{video_id}")
+        print(f"   curl {settings.BACKEND_BASE_URL}/api/v1/videos/{video_id}")
         print("\n4. If worker is not running, start it:")
         print("   docker-compose up -d video_worker")
 

@@ -69,6 +69,22 @@ A self-hosted, mobile-first short-video platform similar to TikTok, built with N
 └── PRD.md               # Product Requirements Document
 ```
 
+## Configuration
+
+The project uses a centralized configuration system via environment variables. The main configuration file is `.env` (copy from `.env.example`).
+
+### Key Configuration Variables
+
+- **`BACKEND_BASE_URL`** - Central backend URL (default: `http://localhost:8000`)
+  - Used by: Docker Compose, backend scripts, shell scripts
+  - Frontend URLs are derived from this: `NUXT_PUBLIC_API_BASE_URL=${BACKEND_BASE_URL}/api/v1`
+  - All references to the backend URL throughout the project use this variable
+
+- **`FRONTEND_PORT`** - Frontend port (default: `3000`)
+- **`BACKEND_PORT`** - Backend port (default: `8000`)
+
+To change the backend URL, update `BACKEND_BASE_URL` in `.env` and restart services.
+
 ## Getting Started
 
 ### Prerequisites
@@ -105,11 +121,13 @@ A self-hosted, mobile-first short-video platform similar to TikTok, built with N
 
 5. **Access the application**
    - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+   - Backend API: ${BACKEND_BASE_URL} (default: http://localhost:8000)
+   - API Docs: ${BACKEND_BASE_URL}/docs (default: http://localhost:8000/docs)
    - **Celery Flower** (Task Monitoring): http://localhost:5555
      - Default credentials: `admin` / `admin` (change in production!)
      - Monitor video processing tasks, worker status, and queue health
+
+**Note:** All URLs are configurable via environment variables in `.env`. The `BACKEND_BASE_URL` variable centralizes the backend URL configuration used throughout the project.
 
 ### Local Development
 
@@ -139,8 +157,10 @@ uvicorn app.main:app --reload
 cd frontend
 npm install
 
-# Set environment variables
-export NUXT_PUBLIC_API_BASE_URL="http://localhost:8000/api/v1"
+# Set environment variables (or use .env file with BACKEND_BASE_URL)
+export BACKEND_BASE_URL="http://localhost:8000"
+export NUXT_PUBLIC_API_BASE_URL="${BACKEND_BASE_URL}/api/v1"
+export NUXT_PUBLIC_BACKEND_BASE_URL="${BACKEND_BASE_URL}"
 
 # Start development server
 npm run dev

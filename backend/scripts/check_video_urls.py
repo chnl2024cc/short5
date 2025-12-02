@@ -47,7 +47,7 @@ async def check_video(video_id: str = None):
             print(f"  thumbnail: {video.thumbnail}")
             
             # Check if URLs are accessible
-            base_url = "http://localhost:8000"
+            base_url = settings.BACKEND_BASE_URL
             
             if video.url_mp4:
                 print(f"\n  Checking MP4 URL...")

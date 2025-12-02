@@ -181,7 +181,7 @@ const videosStore = useVideosStore()
 
 // Helper to convert relative URLs to absolute URLs
 const config = useRuntimeConfig()
-const backendBaseUrl = config.public.backendBaseUrl || 'http://localhost:8000'
+const backendBaseUrl = config.public.backendBaseUrl
 
 const getAbsoluteUrl = (url: string): string => {
   // Fail fast if URL is missing (should never happen with required fields)
