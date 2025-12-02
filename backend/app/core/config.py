@@ -2,7 +2,7 @@
 Application Configuration
 """
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
+from pydantic import field_validator, Field, model_validator
 from typing import List, Union
 
 
@@ -14,7 +14,12 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     
     # Backend
-    BACKEND_BASE_URL: str = "http://localhost:8000"
+    # Read from BACKEND_BASE_URL environment variable
+    # Default is for development only. In production, this MUST be set via environment variable.
+    BACKEND_BASE_URL: str = Field(
+        default="http://localhost:8000",
+        description="Base URL for the backend API. Must be set via BACKEND_BASE_URL env var in production."
+    )
     
     # JWT
     JWT_SECRET_KEY: str = "change-me-in-production-use-strong-random-key"
@@ -43,6 +48,17 @@ class Settings(BaseSettings):
     
     # Environment
     ENVIRONMENT: str = "development"
+    
+    @model_validator(mode="after")
+    def validate_production_settings(self):
+        """Validate that production/staging environments have proper configuration"""
+        if self.ENVIRONMENT in ("production", "staging"):
+            if self.BACKEND_BASE_URL == "http://localhost:8000":
+                raise ValueError(
+                    f"BACKEND_BASE_URL must be set via environment variable in {self.ENVIRONMENT} environment. "
+                    "Using localhost default is not allowed in production/staging."
+                )
+        return self
     
     class Config:
         env_file = ".env"

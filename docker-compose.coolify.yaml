@@ -1,0 +1,202 @@
+services:
+  # PostgreSQL Database (Internal Service)
+  postgres:
+    image: postgres:15-alpine
+    container_name: short5_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-short5_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-short5_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-short5_user} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - short5_network
+    # Internal service - not exposed via Traefik
+
+  # Redis for Celery/RQ (Internal Service)
+  redis:
+    image: redis:7-alpine
+    container_name: short5_redis
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - short5_network
+    # Internal service - not exposed via Traefik
+
+  # FastAPI Backend (Exposed via Traefik)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: short5_backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-short5_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-short5_db}
+      REDIS_URL: redis://redis:6379/0
+      # Use SERVICE_URL_BACKEND from Coolify for the backend URL
+      BACKEND_BASE_URL: ${SERVICE_URL_BACKEND:-https://api.example.com}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # CORS origins - should include frontend URL
+      CORS_ORIGINS: ${CORS_ORIGINS:-${SERVICE_URL_FRONTEND:-https://example.com}}
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      video_worker:
+        condition: service_healthy
+    networks:
+      - short5_network
+      - coolify
+    # Production command (no reload)
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    labels:
+      # Traefik labels for Coolify
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+      - "traefik.http.routers.backend.rule=Host(`${SERVICE_URL_BACKEND}`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.backend-ratelimit.ratelimit.average=100"
+      - "traefik.http.routers.backend.middlewares=backend-ratelimit"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # FFmpeg Video Worker (Internal Service)
+  video_worker:
+    build:
+      context: ./video_worker
+      dockerfile: Dockerfile
+    container_name: short5_video_worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-short5_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-short5_db}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      C_FORCE_ROOT: "true"
+    volumes:
+      - video_worker_temp:/tmp/video_processing
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - short5_network
+    command: celery -A worker worker --loglevel=info --concurrency=${WORKER_CONCURRENCY:-2} -Q celery
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A worker inspect ping | grep -q pong || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    # Internal service - not exposed via Traefik
+
+  # Celery Flower - Monitoring (Optional: Internal or with Auth)
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: short5_flower
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD}
+    depends_on:
+      - redis
+      - video_worker
+    networks:
+      - short5_network
+      # Uncomment to expose Flower via Traefik (optional)
+      # - coolify
+    command: celery -A app.celery_app flower --port=5555 --broker=redis://redis:6379/0 --address=0.0.0.0
+    # Optional: Uncomment labels to expose Flower via Traefik
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.docker.network=coolify"
+    #   - "traefik.http.routers.flower.rule=Host(`${SERVICE_URL_FLOWER:-flower.example.com}`)"
+    #   - "traefik.http.routers.flower.entrypoints=websecure"
+    #   - "traefik.http.routers.flower.tls.certresolver=letsencrypt"
+    #   - "traefik.http.services.flower.loadbalancer.server.port=5555"
+    restart: unless-stopped
+
+  # Nuxt Frontend (Exposed via Traefik)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: short5_frontend
+    environment:
+      # Use SERVICE_URL_BACKEND from Coolify for API URLs
+      NUXT_PUBLIC_API_BASE_URL: ${SERVICE_URL_BACKEND:-https://api.example.com}/api/v1
+      NUXT_PUBLIC_BACKEND_BASE_URL: ${SERVICE_URL_BACKEND:-https://api.example.com}
+      NODE_ENV: production
+    depends_on:
+      - backend
+    networks:
+      - short5_network
+      - coolify
+    labels:
+      # Traefik labels for Coolify
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+      - "traefik.http.routers.frontend.rule=Host(`${SERVICE_URL_FRONTEND}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      # Redirect HTTP to HTTPS
+      - "traefik.http.routers.frontend-http.rule=Host(`${SERVICE_URL_FRONTEND}`)"
+      - "traefik.http.routers.frontend-http.entrypoints=web"
+      - "traefik.http.routers.frontend-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Note: wget is available in node:alpine, or use: node -e "require('http').get('http://localhost:3000')"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_uploads:
+  video_worker_temp:
+
+networks:
+  short5_network:
+    driver: bridge
+    internal: false
+  coolify:
+    external: true
+    # Coolify's Traefik network name - adjust if your Coolify instance uses a different name
+    name: ${COOLIFY_NETWORK_NAME:-coolify}
