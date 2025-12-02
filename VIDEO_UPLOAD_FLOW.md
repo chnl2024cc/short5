@@ -412,7 +412,6 @@ Task Queued
 ### **What Flower Shows:**
 
 1. **Workers Tab:**
-   - `celery@short5_celery_worker` - General worker
    - `celery@short5_video_worker` - Video processing worker
    - Active tasks, processed tasks, worker status
 
@@ -435,9 +434,8 @@ Task Queued
 
 ```
 Dashboard
-├─ Workers: 2 active
-│  ├─ celery@short5_video_worker (2 active tasks)
-│  └─ celery@short5_celery_worker (idle)
+├─ Workers: 1 active
+│  └─ celery@short5_video_worker (2 active tasks)
 │
 ├─ Tasks: 150 total
 │  ├─ process_video: 145

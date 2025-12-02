@@ -73,7 +73,7 @@ echo ""
 echo -e "${GRAY}Verifying containers are running...${NC}"
 sleep 2
 RUNNING_COUNT=$(docker compose ps --format json | jq -r 'select(.State == "running")' | wc -l)
-EXPECTED_COUNT=6  # frontend, backend, postgres, redis, celery_worker, video_worker
+EXPECTED_COUNT=5  # frontend, backend, postgres, redis, video_worker
 
 if [ "$RUNNING_COUNT" -lt "$EXPECTED_COUNT" ]; then
     echo -e "${YELLOW}⚠️  Warning: Only $RUNNING_COUNT containers are running (expected $EXPECTED_COUNT)${NC}"

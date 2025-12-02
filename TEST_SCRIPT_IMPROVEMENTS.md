@@ -14,7 +14,7 @@ Updated both `test-browser.ps1` and `test-browser.sh` to **ALWAYS restart Docker
 ### 2. **Enhanced Error Handling**
 - Better error checking for `docker compose down` and `docker compose up`
 - Verification that containers actually started successfully
-- Container count validation (expects 6 containers: frontend, backend, postgres, redis, celery_worker, video_worker)
+- Container count validation (expects 5 containers: frontend, backend, postgres, redis, video_worker)
 
 ### 3. **Rebuild Option**
 - Added `--rebuild` flag to rebuild Docker images when dependencies change
@@ -82,7 +82,6 @@ Updated both `test-browser.ps1` and `test-browser.sh` to **ALWAYS restart Docker
 - ✅ `short5_backend` - FastAPI backend  
 - ✅ `short5_postgres` - PostgreSQL database
 - ✅ `short5_redis` - Redis cache/broker
-- ✅ `short5_celery_worker` - Celery worker
 - ✅ `short5_video_worker` - Video processing worker
 
 ## Important Notes

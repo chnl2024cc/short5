@@ -69,29 +69,6 @@ services:
       - short5_network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # Celery Worker for Background Jobs
-  celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: short5_celery_worker
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-short5_user}:${POSTGRES_PASSWORD:-short5_password}@postgres:5432/${POSTGRES_DB:-short5_db}
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-    volumes:
-      - ./backend:/app
-      - backend_uploads:/app/uploads
-    depends_on:
-      - postgres
-      - redis
-      - backend
-    networks:
-      - short5_network
-    # Use a different queue to avoid conflicts with video_worker
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=2 -Q default
-
   # FFmpeg Video Worker
   video_worker:
     build:
@@ -138,7 +115,6 @@ services:
       - "${FLOWER_PORT:-5555}:5555"
     depends_on:
       - redis
-      - celery_worker
       - video_worker
     networks:
       - short5_network

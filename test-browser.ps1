@@ -62,7 +62,7 @@ Write-Host "✓ Containers started" -ForegroundColor Green
 Write-Host "`nVerifying containers are running..." -ForegroundColor Gray
 Start-Sleep -Seconds 2
 $runningContainers = docker compose ps --format json | ConvertFrom-Json | Where-Object { $_.State -eq "running" }
-$expectedContainers = @("short5_frontend", "short5_backend", "short5_postgres", "short5_redis", "short5_celery_worker", "short5_video_worker")
+$expectedContainers = @("short5_frontend", "short5_backend", "short5_postgres", "short5_redis", "short5_video_worker")
 $runningCount = ($runningContainers | Measure-Object).Count
 
 if ($runningCount -lt $expectedContainers.Count) {
