@@ -29,17 +29,16 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy source code
 COPY . .
 
-# Build arguments for environment variables
+# Build arguments - only variables from external sources (.env or PaaS)
 ARG NUXT_PUBLIC_API_BASE_URL
 ARG NUXT_PUBLIC_BACKEND_BASE_URL
 ARG NODE_ENV=production
 
-# Set environment variables for build
+# Set environment variables for build (convert ARGs to ENV so Nuxt can access them)
 ENV NUXT_PUBLIC_API_BASE_URL=${NUXT_PUBLIC_API_BASE_URL}
 ENV NUXT_PUBLIC_BACKEND_BASE_URL=${NUXT_PUBLIC_BACKEND_BASE_URL}
 ENV NODE_ENV=${NODE_ENV}
 ENV NUXT_TELEMETRY_DISABLED=1
-# Explicitly disable devtools in production builds
 ENV NUXT_DEVTOOLS_ENABLED=false
 
 # Build the application
@@ -71,8 +70,7 @@ USER nuxt
 # Expose the application port
 EXPOSE 3000
 
-# Set production environment variables
-ENV NODE_ENV=production
+# Set runtime environment variables (NODE_ENV should be set via docker-compose for flexibility)
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV NUXT_TELEMETRY_DISABLED=1

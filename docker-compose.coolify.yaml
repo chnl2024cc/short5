@@ -127,15 +127,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Build arguments - required at build time for Nuxt public runtime config
+        # Build arguments - use .env variables or Coolify's SERVICE_URL_BACKEND
         # These are baked into the build and cannot be changed at runtime
-        NUXT_PUBLIC_API_BASE_URL: ${SERVICE_URL_BACKEND}/api/v1
-        NUXT_PUBLIC_BACKEND_BASE_URL: ${SERVICE_URL_BACKEND}
-        NODE_ENV: production
+        NUXT_PUBLIC_API_BASE_URL: ${NUXT_PUBLIC_API_BASE_URL:-${SERVICE_URL_BACKEND}/api/v1}
+        NUXT_PUBLIC_BACKEND_BASE_URL: ${NUXT_PUBLIC_BACKEND_BASE_URL:-${SERVICE_URL_BACKEND}}
+        NODE_ENV: ${NODE_ENV:-production}
     container_name: short5_frontend
     environment:
-      # Runtime environment variables
-      NODE_ENV: production
+      # Runtime environment variables (configurable via .env or PaaS)
+      NODE_ENV: ${NODE_ENV:-production}
       HOST: 0.0.0.0
       PORT: 3000
       NUXT_TELEMETRY_DISABLED: 1
