@@ -45,5 +45,11 @@ export default defineNuxtConfig({
     // Type checking should be done in CI/CD or locally, not during Docker builds
     typeCheck: false,
   },
+
+  vite: {
+    build: {
+      sourcemap: process.env.NODE_ENV === 'development',
+    },
+  },
 })
 
