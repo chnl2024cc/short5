@@ -50,7 +50,7 @@
 
     <video
       ref="videoElement"
-      class="w-full h-full object-contain cursor-pointer"
+      class="h-full object-cover cursor-pointer"
       :class="{ 'opacity-0': isLoading || hasError }"
       :autoplay="isActive && !isLoading && !hasError"
       :loop="true"
