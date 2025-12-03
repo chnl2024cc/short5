@@ -19,8 +19,8 @@
         </p>
         <div class="flex flex-col gap-3 items-center">
           <button
-            @click="loadFeed()"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto"
+            @click="refreshFeed"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto text-center"
           >
             🔄 Refresh Feed
           </button>
@@ -317,7 +317,15 @@ watch(() => currentIndex.value, () => {
   videoStartedForHint.value = false
 })
 
-onMounted(async () => {
+const initializeFeed = async () => {
+  // Reset feed state
+  videos.value = []
+  currentIndex.value = 0
+  nextCursor.value = null
+  hasMore.value = true
+  searchAttempts.value = 0
+  targetVideoId.value = null
+  
   // Check if there's a video query parameter
   const videoId = route.query.video as string | undefined
   if (videoId) {
@@ -337,7 +345,40 @@ onMounted(async () => {
   
   // After feed loads, ensure target video is active
   await ensureTargetVideoActive()
+}
+
+const refreshFeed = async () => {
+  isRefreshing = true
+  try {
+    // Clear any query parameters and refresh the feed
+    if (route.path !== '/' || route.query.video) {
+      // Navigate to "/" to clear query parameters
+      await navigateTo('/', { replace: true })
+    }
+    // Always refresh the feed
+    await initializeFeed()
+  } finally {
+    isRefreshing = false
+  }
+}
+
+onMounted(async () => {
+  await initializeFeed()
 })
+
+// Watch for route changes (e.g., navigating to "/" to refresh)
+// Only trigger on actual route changes, not when refreshFeed() is called directly
+let isRefreshing = false
+watch(
+  () => [route.path, route.query.video],
+  async ([newPath, newVideoId], [oldPath, oldVideoId]) => {
+    // If navigating to "/" (feed page) and it's a different route or video query changed
+    // Don't trigger if we're already refreshing (to avoid double-loading)
+    if (newPath === '/' && (oldPath !== newPath || oldVideoId !== newVideoId) && !isRefreshing) {
+      await initializeFeed()
+    }
+  }
+)
 
 // Watch for route query changes (e.g., user navigates with different video ID)
 watch(
