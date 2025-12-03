@@ -6,7 +6,6 @@ Wir bauen eine self-hosted, mobile-first Short-Video Plattform ähnlich TikTok:
 - **Frontend:** Nuxt 4 PWA  
 - **Backend:** FastAPI  
 - **Video Worker:** FFmpeg Docker Worker  
-- **Storage/CDN:** S3 / Cloudflare R2  
 - **DB:** PostgreSQL + ORM  
 - **Background Jobs:** Redis + Celery / RQ  
 
@@ -31,7 +30,22 @@ Ziel: **schnelles MVP**, skalierbar, modular erweiterbar, mit Tinder-artiger Swi
 - Calls Backend REST API:  
   - `/feed` (Cursor-basiert, optional auth)  
   - `/videos/upload` (erfordert Auth)  
-  - `/videos/{id}/vote` (erfordert Auth, aber Votes werden lokal zwischengespeichert)  
+  - `/videos/{id}/vote` (erfordert Auth, aber Votes werden lokal zwischengespeichert)
+- **Video Sharing:** 
+  - Share-Button in Video-Player, Profil-Seite und Liked-Videos
+  - Format: `/?video=<video_id>` - geteilte Links springen direkt zum Video im Feed
+  - Mobile: Nutzt Web Share API (native Share-Dialog)
+  - Desktop: Kopiert Link in Zwischenablage mit Bestätigung
+- **Upload Improvements:**
+  - Auto-Fill: Titel wird automatisch aus Dateiname (ohne Extension) übernommen
+  - Benutzer kann Titel vor Upload ändern
+- **Error Handling:**
+  - Videos ohne `url_mp4` werden übersprungen statt App-Crash
+  - Graceful Degradation: Fehlende Thumbnails zeigen Placeholder
+  - Feed lädt weiterhin, auch wenn einzelne Videos fehlerhaft sind
+- **Feed Refresh:**
+  - Refresh-Button auf leeren Feed-Seiten
+  - Navigiert zu `/` für komplett frischen Feed-Start  
 
 **UX/Swipe-Details:**
 
@@ -85,7 +99,7 @@ Ziel: **schnelles MVP**, skalierbar, modular erweiterbar, mit Tinder-artiger Swi
   - Thumbnail + Preview erstellen  
   - Status Update DB → `ready`  
 - Triggered über Queue (Celery/RQ)  
-- Video danach auf CDN ausliefern  
+- Video danach lokal ausliefern  
 
 ---
 
@@ -122,9 +136,9 @@ id | video_id | user_id | watched_seconds | created_at
 
 ---
 
-### Storage / CDN
+### Storage
 
-* Videos auf S3 / Cloudflare R2
+* Videos lokal gespeichert
 * MP4 Streaming mit standard Video-Tag
 * Preload für nächste Videos im Frontend
 
@@ -142,10 +156,43 @@ id | video_id | user_id | watched_seconds | created_at
 1. **Feed Access:** ✅ Implementiert - Feed ist ohne Login zugänglich für maximale Reichweite
 2. **Anonymous Voting:** ✅ Implementiert - Votes werden in localStorage gespeichert und nach Login/Registrierung synchronisiert
 3. **Vote Synchronization:** ✅ Implementiert - Automatische Sync nach erfolgreichem Login oder Registrierung
+4. **Video Sharing:** ✅ Implementiert - Share-Funktionalität mit `/?video=<video_id>` Links, Web Share API auf Mobile, Clipboard auf Desktop
+5. **Upload UX:** ✅ Implementiert - Auto-Fill Titel aus Dateiname, benutzerfreundlicher Upload-Flow
+6. **Error Resilience:** ✅ Implementiert - Videos ohne `url_mp4` werden übersprungen, App bleibt stabil
 
 ---
 
-## 3.2. Video Deletion Feature
+## 3.2. Video Sharing Feature
+
+### Overview
+Users can share videos with friends via shareable links. This enables viral growth and easy content distribution.
+
+### Implementation
+
+**Share URL Format:**
+- Format: `http://localhost:3000/?video=<video_id>` (or production domain)
+- When opened, the feed automatically jumps to the specified video
+- Works for both authenticated and anonymous users
+
+**Share Functionality:**
+- **Share Button Locations:**
+  - Video player overlay (always visible, touch-friendly)
+  - Profile page (on user's own videos)
+  - Liked videos page
+- **Share Methods:**
+  - **Mobile:** Uses Web Share API for native share dialog (WhatsApp, Messages, etc.)
+  - **Desktop:** Copies link to clipboard with confirmation notification
+  - **Fallback:** Shows URL in alert if clipboard API fails
+
+**Technical Details:**
+- Share button is always visible (not hover-only) for mobile compatibility
+- Touch-optimized with proper sizing and feedback
+- Preserves shared video links when navigating/refreshing feed
+- Feed component automatically detects `?video=` query parameter and loads target video
+
+---
+
+## 3.3. Video Deletion Feature
 
 ### Overview
 Users should be able to delete their own videos from their profile view. When a video is deleted, all associated data must be removed comprehensively:
@@ -158,15 +205,10 @@ Users should be able to delete their own videos from their profile view. When a 
    - Reports related to the video should be handled (mark as resolved or delete)
 
 2. **Storage Files:**
-   - **S3/R2 Storage (Production):**
-     - HLS master playlist: `videos/{video_id}/playlist.m3u8`
-     - HLS quality playlists: `videos/{video_id}/720p/{video_id}.m3u8`, `videos/{video_id}/480p/{video_id}.m3u8`
-     - HLS video segments: All `.ts` files in `videos/{video_id}/{quality}/` directories
-     - Thumbnail: `videos/{video_id}/thumbnail.jpg`
-     - MP4 file (if exists): Based on `url_mp4` field
-   - **Local Storage (Development):**
-     - Original uploaded file: `/app/uploads/{video_id}.{ext}`
-     - Processed files: All files in `/app/uploads/processed/` containing `{video_id}` in filename
+   - **Local Storage:**
+     - Original uploaded file: `/app/uploads/originals/{video_id}.{ext}`
+     - Processed MP4: `/app/uploads/processed/{video_id}/video.mp4`
+     - Processed thumbnail: `/app/uploads/processed/{video_id}/thumbnail.jpg`
      - Temporary processing files: `/tmp/video_processing/{video_id}/` directory
 
 3. **Cache Invalidation:**
@@ -183,7 +225,7 @@ Users should be able to delete their own videos from their profile view. When a 
 **Backend:**
 - Create a comprehensive video deletion service that:
   1. Extracts storage paths from video URLs
-  2. Deletes all files from S3/local storage
+  2. Deletes all files from local storage
   3. Invalidates relevant caches
   4. Deletes database record (CASCADE handles related records)
   5. Handles errors gracefully (continue deletion even if some files fail)
@@ -200,9 +242,9 @@ Users should be able to delete their own videos from their profile view. When a 
 - Returns: Success message or error details
 
 ### Storage Cleanup Logic
-- Parse storage URLs to extract S3 keys or local file paths
-- Delete entire `videos/{video_id}/` prefix in S3 (or all matching files locally)
-- Handle both production (S3/R2) and development (local file system) modes
+- Parse storage URLs to extract local file paths
+- Delete all matching files locally for the video
+- Handle local file system storage
 
 ---
 
@@ -218,12 +260,13 @@ Users should be able to delete their own videos from their profile view. When a 
 
 ## 5. Summary
 
-* **Frontend:** Nuxt 4 PWA, Mobile-first, vertikaler Feed (ohne Login-Anforderung), Preload für smooth swipe, Overlay „LIKE/NOPE", Anonymous Voting mit localStorage-Speicherung
+* **Frontend:** Nuxt 4 PWA, Mobile-first, vertikaler Feed (ohne Login-Anforderung), Preload für smooth swipe, Overlay „LIKE/NOPE", Anonymous Voting mit localStorage-Speicherung, Video-Sharing mit `/?video=<id>` Links, Auto-Fill Titel aus Dateiname, Error-Handling für fehlerhafte Videos
 * **Backend:** FastAPI, Async REST API, JWT Auth (optional für Feed), Video/Feed/Admin Modules, Liked-/Saved-Liste, Vote-Synchronisation
-* **Video Worker:** FFmpeg Docker, HLS + Thumbnail, Queue via Celery/RQ
+* **Video Worker:** FFmpeg Docker, MP4 Transcoding + Thumbnail, Queue via Celery/RQ
 * **DB:** PostgreSQL + ORM, inkl. UserLikedVideos
-* **Storage/CDN:** S3 / Cloudflare R2
+* **Storage:** Lokale Dateispeicherung
 * **Feed Algorithm:** Tinder-like Swipe: Rechts = Like / Saved-Liste, Links = Nicht-Like, beeinflusst Empfehlungen
 * **UX-Hinweis:** Standard Tinder-Swipe übernommen → intuitive Nutzererfahrung
 * **User Acquisition:** Anonymous Access ermöglicht maximale Reichweite für geteilte Links, Votes werden nach Account-Erstellung synchronisiert
+* **Content Sharing:** Share-Funktionalität ermöglicht einfache Verbreitung von Videos über Messaging-Apps und Social Media
 
