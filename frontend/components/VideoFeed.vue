@@ -106,15 +106,19 @@ const loadTargetVideo = async (videoId: string) => {
     // Try to fetch the video directly by ID
     const video = await videosStore.getVideoStatus(videoId)
     
-    // Fail fast if video is not ready or missing required fields
+    // Check if video exists and is ready
     if (!video) {
-      throw new Error(`Video ${videoId} not found`)
+      console.warn(`Video ${videoId} not found`)
+      return false
     }
     if (video.status !== 'ready') {
-      throw new Error(`Video ${videoId} is not ready (status: ${video.status})`)
+      console.warn(`Video ${videoId} is not ready (status: ${video.status})`)
+      return false
     }
+    // Skip videos without url_mp4 instead of throwing error
     if (!video.url_mp4) {
-      throw new Error(`Video ${videoId} is missing url_mp4 - invalid state`)
+      console.warn(`Video ${videoId} is missing url_mp4 - skipping`)
+      return false
     }
     
     // Insert at the beginning of the feed
@@ -137,9 +141,18 @@ const loadFeed = async (cursor?: string) => {
   try {
     const response = await api.get<FeedResponse>(`/feed${cursor ? `?cursor=${cursor}` : ''}`)
     
+    // Filter out videos without url_mp4 - skip them instead of failing
+    const validVideos = (response.videos || []).filter((video) => {
+      if (!video.url_mp4) {
+        console.warn(`Skipping video ${video.id} - missing url_mp4`)
+        return false
+      }
+      return true
+    })
+    
     if (cursor) {
       // Append to existing videos
-      videos.value.push(...response.videos)
+      videos.value.push(...validVideos)
     } else {
       // Replace videos, but preserve target video if it was loaded directly
       const routeVideoId = route.query.video as string | undefined
@@ -147,7 +160,7 @@ const loadFeed = async (cursor?: string) => {
         ? videos.value.find(v => v.id === routeVideoId)
         : null
       
-      videos.value = response.videos
+      videos.value = validVideos
       
       // If we had a target video loaded directly, make sure it's still in the list
       if (targetVideo && !videos.value.find(v => v.id === targetVideo.id)) {

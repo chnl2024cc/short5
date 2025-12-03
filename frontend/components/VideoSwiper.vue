@@ -43,7 +43,7 @@
     <div
       v-if="isLoading || hasError"
       class="absolute inset-0 bg-cover bg-center"
-      :style="{ backgroundImage: `url(${getAbsoluteUrl(video.thumbnail)})` }"
+      :style="video.thumbnail ? { backgroundImage: `url(${getAbsoluteUrl(video.thumbnail)})` } : {}"
     >
       <div class="absolute inset-0 bg-black/40"></div>
     </div>
@@ -130,10 +130,10 @@ const config = useRuntimeConfig()
 const backendBaseUrl = config.public.backendBaseUrl
 
 // Helper to convert relative URLs to absolute URLs
-const getAbsoluteUrl = (url: string): string => {
-  // Fail fast if URL is missing (should never happen with required fields)
+const getAbsoluteUrl = (url: string | null | undefined): string => {
+  // Handle missing URLs gracefully - return empty string instead of throwing
   if (!url) {
-    throw new Error('URL is required but was missing')
+    return ''
   }
   // If already absolute (starts with http:// or https://), return as-is
   if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -346,15 +346,18 @@ const initializeVideo = async (retry = false) => {
   }
   
   try {
-    // Fail fast if url_mp4 is missing
+    // Skip videos without url_mp4 instead of throwing
     if (!props.video.url_mp4) {
-      throw new Error(`Video ${props.video.id} is missing url_mp4 - invalid state`)
+      console.warn(`Video ${props.video.id} is missing url_mp4 - skipping`)
+      handleVideoError(new Error('Video is not ready for playback'))
+      return
     }
     
     // Simple MP4 playback - works in all modern browsers
     const mp4Src = getAbsoluteUrl(props.video.url_mp4)
     if (!mp4Src) {
-      throw new Error('MP4 URL is invalid or could not be resolved')
+      handleVideoError(new Error('MP4 URL is invalid or could not be resolved'))
+      return
     }
     console.log(`[VideoSwiper] Loading MP4: ${mp4Src}`)
     video.src = mp4Src

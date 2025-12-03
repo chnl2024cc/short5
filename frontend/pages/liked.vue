@@ -183,10 +183,10 @@ const videosStore = useVideosStore()
 const config = useRuntimeConfig()
 const backendBaseUrl = config.public.backendBaseUrl
 
-const getAbsoluteUrl = (url: string): string => {
-  // Fail fast if URL is missing (should never happen with required fields)
+const getAbsoluteUrl = (url: string | null | undefined): string => {
+  // Handle missing URLs gracefully - return placeholder instead of throwing
   if (!url) {
-    throw new Error('URL is required but was missing')
+    return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="600"%3E%3Crect fill="%23333" width="400" height="600"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="18" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo thumbnail%3C/text%3E%3C/svg%3E'
   }
   // If already absolute (starts with http:// or https://), return as-is
   if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -219,12 +219,21 @@ const loadLikedVideos = async (cursor?: string) => {
   try {
     const response = await videosStore.fetchLikedVideos(cursor)
     
+    // Filter out videos without url_mp4 - skip them instead of failing
+    const validVideos = (response.videos || []).filter((video) => {
+      if (!video.url_mp4) {
+        console.warn(`Skipping video ${video.id} - missing url_mp4`)
+        return false
+      }
+      return true
+    })
+    
     if (cursor) {
       // Append to existing videos
-      videos.value.push(...response.videos)
+      videos.value.push(...validVideos)
     } else {
       // Replace videos
-      videos.value = response.videos
+      videos.value = validVideos
     }
     
     nextCursor.value = response.next_cursor
@@ -243,6 +252,12 @@ const loadMore = () => {
 }
 
 const playVideo = (video: any) => {
+  // Only navigate if video has url_mp4 - skip videos without it
+  if (!video.url_mp4) {
+    console.warn(`Cannot view video ${video.id} - missing url_mp4`)
+    alert('This video is not ready for playback yet. Please try again later.')
+    return
+  }
   // Navigate to the feed starting at this specific video
   // The VideoFeed component will detect the ?video query param and jump to that video
   navigateTo(`/?video=${video.id}`)
