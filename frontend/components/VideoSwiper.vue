@@ -108,7 +108,7 @@
     </div>
     
     <!-- Video Info Overlay -->
-    <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent text-white z-30">
+    <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent text-white z-30" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom));">
       <h3 v-if="video.title && video.title.trim() !== '' && video.title.toLowerCase() !== 'untitled'" class="font-bold text-lg">
         {{ video.title }}
       </h3>
@@ -640,9 +640,16 @@ onUnmounted(() => {
 @reference "tailwindcss";
 
 .video-container {
-  @apply relative w-full h-screen flex items-center justify-center bg-black touch-none;
+  @apply relative w-full flex items-center justify-center bg-black touch-none;
+  /* Use dynamic viewport height for mobile browsers */
+  height: 100dvh;
+  height: 100vh; /* Fallback for older browsers */
+  min-height: 100dvh;
+  min-height: 100vh; /* Fallback */
   user-select: none;
   -webkit-user-select: none;
+  /* Account for safe area insets on iOS */
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .swipe-overlay {

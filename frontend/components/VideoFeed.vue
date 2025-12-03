@@ -2,14 +2,16 @@
   <div class="feed-container">
     <div
       v-if="loading && videos.length === 0"
-      class="flex items-center justify-center h-screen"
+      class="flex items-center justify-center"
+      style="height: 100dvh; height: 100vh;"
     >
       <div class="text-white text-xl">Loading feed...</div>
     </div>
     
     <div
       v-else-if="videos.length === 0"
-      class="flex flex-col items-center justify-center h-screen px-4"
+      class="flex flex-col items-center justify-center px-4"
+      style="height: 100dvh; height: 100vh;"
     >
       <div class="text-center max-w-md">
         <div class="text-6xl mb-4">📹</div>
@@ -43,7 +45,8 @@
     
     <div
       v-else
-      class="relative w-full h-screen"
+      class="relative w-full"
+      style="height: 100dvh; height: 100vh;"
     >
       <VideoSwiper
         v-for="(video, index) in visibleVideos"
@@ -407,9 +410,15 @@ watch(
 .feed-container {
   position: relative;
   width: 100%;
-  height: 100vh;
+  /* Use dynamic viewport height for mobile browsers */
+  height: 100dvh;
+  height: 100vh; /* Fallback for older browsers */
+  min-height: 100dvh;
+  min-height: 100vh; /* Fallback */
   overflow: hidden;
   background-color: black;
+  /* Account for safe area insets on iOS */
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .feed-container video {

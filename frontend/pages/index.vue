@@ -1,5 +1,5 @@
 <template>
-  <div class="h-screen w-full bg-black relative">
+  <div class="w-full bg-black relative" style="height: 100dvh; height: 100vh; min-height: 100dvh; min-height: 100vh;">
     <!-- Top Navigation Bar -->
     <div class="absolute top-0 left-0 right-0 z-40 bg-gradient-to-b from-black/80 to-transparent px-4 py-3">
       <div class="flex items-center justify-between">
@@ -77,7 +77,8 @@
     <NuxtLink
       v-if="authStore.isAuthenticated"
       to="/upload"
-      class="fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all hover:scale-110"
+      class="fixed right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all hover:scale-110"
+      style="bottom: calc(1.5rem + env(safe-area-inset-bottom));"
       title="Upload Video"
     >
       <svg

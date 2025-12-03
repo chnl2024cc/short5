@@ -4,10 +4,20 @@
 /* Custom styles for mobile-first design */
 html {
   @apply h-full;
+  /* Use dynamic viewport height for mobile browsers */
+  height: 100dvh;
+  height: 100vh; /* Fallback for older browsers */
 }
 
 body {
   @apply h-full;
+  /* Use dynamic viewport height for mobile browsers */
+  height: 100dvh;
+  height: 100vh; /* Fallback for older browsers */
+  /* Prevent overscroll bounce on iOS */
+  overscroll-behavior: none;
+  /* Add safe area insets for iOS notch/home indicator */
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Swipe container styles */
@@ -18,7 +28,13 @@ body {
 
 /* Video player container */
 .video-container {
-  @apply relative w-full h-screen flex items-center justify-center bg-black;
+  @apply relative w-full flex items-center justify-center bg-black;
+  /* Use dynamic viewport height for mobile browsers */
+  height: 100dvh;
+  height: 100vh; /* Fallback for older browsers */
+  /* Account for safe area insets */
+  min-height: 100dvh;
+  min-height: 100vh; /* Fallback */
 }
 
 /* Swipe overlay styles */
