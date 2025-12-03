@@ -1,0 +1,143 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Virtual environments
+env/
+venv/
+ENV/
+.venv
+.conda
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings
+*.sublime-project
+*.sublime-workspace
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.*
+!.env.example
+
+# Uploads (should be in volumes, not in image)
+uploads/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+*.log.*
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+test_*.py
+*_test.py
+tests/
+test/
+
+# Development scripts (not needed in production)
+scripts/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Documentation
+*.md
+README*
+CHANGELOG*
+LICENSE*
+CONTRIBUTING*
+docs/
+documentation/
+
+# Git
+.git
+.gitignore
+.gitattributes
+.gitkeep
+.gitmodules
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+.docker/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+.travis.yml
+Jenkinsfile
+azure-pipelines.yml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+*.bak
+*.backup
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*.orig
+
+# Code quality tools
+.ruff_cache/
+.black
+.flake8
+.pylint.d/
+*.cover
+
+# Migration backups (if any)
+*.sql.bak
+migrations/versions/*.pyc
+
+# Local development files
+local/
+local_settings.py
+local_config.py

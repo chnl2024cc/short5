@@ -9,11 +9,15 @@ pnpm-debug.log
 .nuxt
 .nitro
 dist
+.cache
+.data
 
 # Development files
+.env
 .env.local
 .env.*.local
 *.log
+*.log.*
 
 # IDE
 .vscode
@@ -21,15 +25,20 @@ dist
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Git
 .git
 .gitignore
 .gitattributes
+.gitkeep
 
 # Docker
 Dockerfile*
@@ -39,14 +48,63 @@ docker-compose*.yml
 # Documentation
 *.md
 README*
+CHANGELOG*
+LICENSE*
+CONTRIBUTING*
 
 # Tests
 coverage
 .nyc_output
 *.test.js
+*.test.ts
+*.test.tsx
 *.spec.js
+*.spec.ts
+*.spec.tsx
+*.test.*
+*.spec.*
+__tests__
+__mocks__
+test/
+tests/
+*.test.ps1
+*.test.sh
+
+# Scripts (development/testing)
+*.ps1
+*.sh
+*.bat
+*.cmd
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+.travis.yml
+Jenkinsfile
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Source maps (not needed in production)
+*.map
+*.map.js
+*.map.css
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
 
 # Misc
 .editorconfig
 .prettierrc
+.prettierignore
 .eslintrc*
+.eslintignore
+.stylelintrc*
+.stylelintignore
