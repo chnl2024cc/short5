@@ -113,9 +113,26 @@
         {{ video.title }}
       </h3>
       <p class="text-sm">{{ video.user?.username }}</p>
-      <div class="flex gap-4 mt-2 text-sm">
+      <div class="flex gap-4 mt-2 text-sm items-center">
         <span>❤️ {{ video.stats?.likes || 0 }}</span>
         <span>👁️ {{ video.stats?.views || 0 }}</span>
+        <button
+          @click.stop="handleShare"
+          class="flex items-center gap-1 px-3 py-1.5 bg-black/60 hover:bg-black/80 active:bg-black/90 rounded-lg transition-colors touch-manipulation"
+          title="Share video"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          <span class="font-medium">Share</span>
+        </button>
+      </div>
+      <!-- Share notification -->
+      <div
+        v-if="showShareNotification"
+        class="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-40 animate-fade-in"
+      >
+        Link copied to clipboard!
       </div>
     </div>
   </div>
@@ -175,6 +192,7 @@ const errorMessage = ref('')
 const isRetrying = ref(false)
 const isBuffering = ref(false)
 const isVideoPaused = ref(false) // Track video paused state for play button overlay
+const showShareNotification = ref(false)
 
 const retryCount = ref(0)
 const maxRetries = 3
@@ -566,6 +584,43 @@ const onVideoPlay = () => {
   isVideoPaused.value = false
 }
 
+// Share video functionality
+const handleShare = async () => {
+  if (!process.client) return
+  
+  try {
+    const shareUrl = `${window.location.origin}/?video=${props.video.id}`
+    
+    // Try to use Web Share API if available (mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: props.video.title || 'Check out this video',
+          text: props.video.description || '',
+          url: shareUrl,
+        })
+        return
+      } catch (err: any) {
+        // User cancelled or share failed, fall back to clipboard
+        if (err.name !== 'AbortError') {
+          console.warn('Web Share API failed:', err)
+        }
+      }
+    }
+    
+    // Fall back to clipboard
+    await navigator.clipboard.writeText(shareUrl)
+    showShareNotification.value = true
+    setTimeout(() => {
+      showShareNotification.value = false
+    }, 2000)
+  } catch (error) {
+    console.error('Failed to share video:', error)
+    // Fallback: show the URL in an alert
+    alert(`Share this link: ${window.location.origin}/?video=${props.video.id}`)
+  }
+}
+
 onMounted(() => {
   // Initialize video playback when component is mounted
   if (process.client) {
@@ -620,5 +675,25 @@ onUnmounted(() => {
   100% {
     transform: rotate(360deg);
   }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 </style>

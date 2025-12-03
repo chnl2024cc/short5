@@ -290,6 +290,12 @@ const processFile = (file: File) => {
   
   selectedFile.value = file
   
+  // Auto-fill title from filename (without extension) if title is empty
+  if (!form.value.title || form.value.title.trim() === '') {
+    const filenameWithoutExt = file.name.replace(/\.[^/.]+$/, '')
+    form.value.title = filenameWithoutExt
+  }
+  
   // Create preview URL
   if (videoPreviewUrl.value) {
     URL.revokeObjectURL(videoPreviewUrl.value)
@@ -308,6 +314,8 @@ const clearFile = () => {
   }
   error.value = null
   fileError.value = null
+  // Clear title when file is removed
+  form.value.title = ''
 }
 
 const handleUpload = async () => {

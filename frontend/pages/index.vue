@@ -3,7 +3,7 @@
     <!-- Top Navigation Bar -->
     <div class="absolute top-0 left-0 right-0 z-40 bg-gradient-to-b from-black/80 to-transparent px-4 py-3">
       <div class="flex items-center justify-between">
-        <h1 class="text-xl font-bold text-white">Short-Video</h1>
+        <h1 class="text-xl font-bold text-white">Short5</h1>
         <div class="flex items-center gap-4">
           <!-- Liked Videos Link - Available for everyone (authenticated users see server-side, unauthenticated see localStorage) -->
           <NuxtLink

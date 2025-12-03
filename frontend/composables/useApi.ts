@@ -1,6 +1,8 @@
 /**
  * API Client Composable
  */
+import { useAuthStore } from '~/stores/auth'
+
 export const useApi = () => {
   const config = useRuntimeConfig()
   const apiBaseUrl = config.public.apiBaseUrl

@@ -198,13 +198,35 @@
               class="bg-gray-900 rounded-lg overflow-hidden hover:bg-gray-800 transition-colors cursor-pointer relative group"
               @click="viewVideo(video)"
             >
-              <!-- Delete Button -->
-              <button
-                @click.stop="handleDeleteVideo(video)"
-                :disabled="isDeleting === video.id"
-                class="absolute top-2 right-2 z-10 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Delete video"
-              >
+              <!-- Action Buttons -->
+              <div class="absolute top-2 right-2 z-10 flex gap-2">
+                <!-- Share Button -->
+                <button
+                  @click.stop="handleShareVideo(video)"
+                  class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white p-2 rounded-full touch-manipulation"
+                  title="Share video"
+                >
+                  <svg
+                    class="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                    />
+                  </svg>
+                </button>
+                <!-- Delete Button -->
+                <button
+                  @click.stop="handleDeleteVideo(video)"
+                  :disabled="isDeleting === video.id"
+                  class="bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white p-2 rounded-full"
+                  title="Delete video"
+                >
                 <svg
                   v-if="isDeleting !== video.id"
                   class="w-4 h-4"
@@ -233,7 +255,8 @@
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-              </button>
+                </button>
+              </div>
               
               <!-- Thumbnail -->
               <div class="relative aspect-[9/16] bg-gray-800">
@@ -564,6 +587,39 @@ const viewVideo = (video: Video) => {
   }
   // Navigate to feed and jump to this specific video
   navigateTo(`/?video=${video.id}`)
+}
+
+const handleShareVideo = async (video: Video) => {
+  if (!process.client) return
+  
+  try {
+    const shareUrl = `${window.location.origin}/?video=${video.id}`
+    
+    // Try to use Web Share API if available (mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: video.title || 'Check out this video',
+          text: video.description || '',
+          url: shareUrl,
+        })
+        return
+      } catch (err: any) {
+        // User cancelled or share failed, fall back to clipboard
+        if (err.name !== 'AbortError') {
+          console.warn('Web Share API failed:', err)
+        }
+      }
+    }
+    
+    // Fall back to clipboard
+    await navigator.clipboard.writeText(shareUrl)
+    alert('Link copied to clipboard!')
+  } catch (error) {
+    console.error('Failed to share video:', error)
+    // Fallback: show the URL in an alert
+    alert(`Share this link: ${window.location.origin}/?video=${video.id}`)
+  }
 }
 
 const handleDeleteVideo = async (video: Video) => {
