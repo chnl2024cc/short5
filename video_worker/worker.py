@@ -202,6 +202,47 @@ def cleanup_failed_video(video_id: str, file_path: Path):
     return cleaned
 
 
+def is_mp4_file(file_path: Path) -> tuple[bool, Optional[str]]:
+    """
+    Check if file is MP4 format (both extension and container format)
+    Returns: (is_mp4, error_message)
+    """
+    # Check file extension
+    if file_path.suffix.lower() != ".mp4":
+        return False, None
+    
+    # Verify container format with ffprobe
+    try:
+        ffprobe_cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=format_name",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(file_path),
+        ]
+        result = subprocess.run(
+            ffprobe_cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,  # 10 second timeout for format check
+        )
+        
+        if result.returncode != 0:
+            return False, f"Could not verify MP4 format: {result.stderr[:200]}"
+        
+        # Check if format contains 'mp4' or 'mov' (MP4 container)
+        format_name = result.stdout.strip().lower()
+        if "mp4" in format_name or "mov" in format_name:
+            return True, None
+        else:
+            return False, f"File has .mp4 extension but container format is: {format_name}"
+        
+    except subprocess.TimeoutExpired:
+        return False, "MP4 format check timed out"
+    except Exception as e:
+        return False, f"Error checking MP4 format: {str(e)[:200]}"
+
+
 def validate_video_file(file_path: Path) -> tuple[bool, Optional[str]]:
     """
     Validate video file before processing
@@ -418,17 +459,29 @@ def process_video(self, video_id: str, file_path: str):
             raise ValueError(validation_error)
         print("  ✓ Video file is valid")
         
-        print(f"✓ File found, starting transcoding...")
+        # Step 2: Check if file is already MP4
+        print("  → Checking if file is already MP4 format...")
+        is_mp4, mp4_check_error = is_mp4_file(input_path)
         
         # Create output directory
         output_dir = TEMP_DIR / video_id
         output_dir.mkdir(exist_ok=True)
         
-        # Transcode to MP4 (simple, universal format)
-        print("  → Transcoding to MP4 format...")
-        mp4_path = output_dir / f"{video_id}.mp4"
-        transcode_to_mp4(input_path, mp4_path)
-        print("  ✓ MP4 transcoding complete")
+        if is_mp4:
+            print("  ✓ File is already MP4 format - skipping transcoding")
+            # Copy file directly to output directory (no transcoding needed)
+            mp4_path = output_dir / f"{video_id}.mp4"
+            import shutil
+            shutil.copy2(input_path, mp4_path)
+            print("  ✓ MP4 file copied (transcoding skipped)")
+        else:
+            if mp4_check_error:
+                print(f"  ℹ Note: {mp4_check_error}")
+            print("  → File is not MP4 - transcoding required...")
+            # Transcode to MP4 (simple, universal format)
+            mp4_path = output_dir / f"{video_id}.mp4"
+            transcode_to_mp4(input_path, mp4_path)
+            print("  ✓ MP4 transcoding complete")
         
         # Create thumbnail
         print("  → Creating thumbnail...")
