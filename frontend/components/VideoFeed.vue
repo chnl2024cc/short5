@@ -5,7 +5,7 @@
       class="flex items-center justify-center"
       style="height: 100%;"
     >
-      <div class="text-white text-xl">Loading feed...</div>
+      <div class="text-white text-xl">{{ t('videoFeed.loadingFeed') }}</div>
     </div>
     
     <div
@@ -15,29 +15,29 @@
     >
       <div class="text-center max-w-md">
         <div class="text-6xl mb-4">📹</div>
-        <h2 class="text-2xl font-bold text-white mb-2">No videos available</h2>
+        <h2 class="text-2xl font-bold text-white mb-2">{{ t('videoFeed.noVideosAvailable') }}</h2>
         <p class="text-gray-400 mb-6">
-          The feed is empty. Try refreshing or check back later for new content.
+          {{ t('videoFeed.feedEmpty') }}
         </p>
         <div class="flex flex-col gap-3 items-center">
           <button
             @click="refreshFeed"
             class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto text-center"
           >
-            🔄 Refresh Feed
+            {{ t('videoFeed.refreshFeed') }}
           </button>
           <NuxtLink
             to="/liked"
             class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto text-center"
           >
-            ❤️ View Liked Videos
+            {{ t('videoFeed.viewLikedVideos') }}
           </NuxtLink>
           <NuxtLink
             v-if="isAuthenticated"
             to="/upload"
             class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto text-center"
           >
-            ➕ Upload Video
+            {{ t('videoFeed.uploadVideo') }}
           </NuxtLink>
         </div>
       </div>
@@ -84,6 +84,7 @@ const route = useRoute()
 const videosStore = useVideosStore()
 const authStore = useAuthStore()
 const api = useApi()
+const { t } = useI18n()
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 

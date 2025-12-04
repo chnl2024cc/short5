@@ -38,7 +38,7 @@
         class="flex items-center justify-center py-20"
       >
         <div class="text-center">
-          <div class="text-gray-400 text-lg mb-2">Loading liked videos...</div>
+          <div class="text-gray-400 text-lg mb-2">{{ t('liked.loadingLikedVideos') }}</div>
         </div>
       </div>
 
@@ -48,15 +48,15 @@
         class="flex flex-col items-center justify-center py-20"
       >
         <div class="text-6xl mb-4">❤️</div>
-        <h2 class="text-2xl font-bold mb-2">No liked videos yet</h2>
+        <h2 class="text-2xl font-bold mb-2">{{ t('liked.noLikedVideos') }}</h2>
         <p class="text-gray-400 text-center mb-6">
-          Start swiping right on videos you like to save them here
+          {{ t('liked.noLikedVideosDescription') }}
         </p>
         <NuxtLink
           to="/"
           class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
         >
-          Browse Feed
+          {{ t('liked.browseFeed') }}
         </NuxtLink>
       </div>
 
@@ -75,7 +75,7 @@
           <button
             @click.stop="handleShareVideo(video)"
             class="absolute top-2 right-2 z-5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white p-2 rounded-full touch-manipulation"
-            title="Share video"
+            :title="t('liked.shareVideo')"
           >
             <svg
               class="w-4 h-4"
@@ -96,7 +96,7 @@
           <div class="relative aspect-[9/16] bg-gray-800">
             <img
               :src="getAbsoluteUrl(video.thumbnail)"
-              :alt="video.title || 'Video thumbnail'"
+              :alt="video.title || t('liked.videoThumbnail')"
               class="w-full h-full object-cover"
             />
             <!-- Play Overlay -->
@@ -173,21 +173,21 @@
         ref="loadMoreRef"
         class="flex justify-center mt-8"
       >
-        <button
-          @click="loadMore"
-          class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-        >
-          Load More
-        </button>
-      </div>
+          <button
+            @click="loadMore"
+            class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+          >
+            {{ t('liked.loadMore') }}
+          </button>
+        </div>
 
-      <!-- Loading More Indicator -->
-      <div
-        v-if="loading && videos.length > 0"
-        class="flex justify-center py-8"
-      >
-        <div class="text-gray-400">Loading more videos...</div>
-      </div>
+        <!-- Loading More Indicator -->
+        <div
+          v-if="loading && videos.length > 0"
+          class="flex justify-center py-8"
+        >
+          <div class="text-gray-400">{{ t('liked.loadingMore') }}</div>
+        </div>
     </div>
   </div>
 </template>
@@ -195,10 +195,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useVideosStore } from '~/stores/videos'
+import { useI18n } from '~/composables/useI18n'
 
 // No auth middleware - allow unauthenticated users to see their localStorage liked videos
 
 const videosStore = useVideosStore()
+const { t } = useI18n()
 
 // Helper to convert relative URLs to absolute URLs
 const config = useRuntimeConfig()
@@ -276,7 +278,7 @@ const playVideo = (video: any) => {
   // Only navigate if video has url_mp4 - skip videos without it
   if (!video.url_mp4) {
     console.warn(`Cannot view video ${video.id} - missing url_mp4`)
-    alert('This video is not ready for playback yet. Please try again later.')
+    alert(t('liked.videoNotReady'))
     return
   }
   // Navigate to the feed starting at this specific video
@@ -294,7 +296,7 @@ const handleShareVideo = async (video: any) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: video.title || 'Check out this video',
+          title: video.title || t('liked.checkOutVideo'),
           text: video.description || '',
           url: shareUrl,
         })
@@ -309,11 +311,11 @@ const handleShareVideo = async (video: any) => {
     
     // Fall back to clipboard
     await navigator.clipboard.writeText(shareUrl)
-    alert('Link copied to clipboard!')
+    alert(t('liked.linkCopied'))
   } catch (error) {
     console.error('Failed to share video:', error)
     // Fallback: show the URL in an alert
-    alert(`Share this link: ${window.location.origin}/?video=${video.id}`)
+    alert(`${t('liked.shareLink')}: ${window.location.origin}/?video=${video.id}`)
   }
 }
 

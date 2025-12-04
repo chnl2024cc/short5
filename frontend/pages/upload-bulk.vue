@@ -3,8 +3,8 @@
     <div class="max-w-4xl mx-auto">
       <!-- Header -->
       <div class="mb-8">
-        <h1 class="text-3xl font-bold mb-2">Bulk Upload Videos</h1>
-        <p class="text-gray-400">Upload multiple videos at once</p>
+        <h1 class="text-3xl font-bold mb-2">{{ t('uploadBulk.title') }}</h1>
+        <p class="text-gray-400">{{ t('uploadBulk.subtitle') }}</p>
       </div>
 
       <!-- Upload Form -->
@@ -12,7 +12,7 @@
         <!-- File Upload Area -->
         <div>
           <label class="block text-sm font-medium text-gray-300 mb-2">
-            Video Files (Multiple)
+            {{ t('uploadBulk.videoFiles') }}
           </label>
           
           <!-- Drag & Drop Zone -->
@@ -41,13 +41,13 @@
               <div class="text-4xl">📹</div>
               <div>
                 <p class="text-lg font-medium mb-1">
-                  Drop your videos here or click to browse
+                  {{ t('uploadBulk.dropVideos') }}
                 </p>
                 <p class="text-sm text-gray-400">
-                  Supported formats: MP4, MOV, AVI (Max 500MB per file)
+                  {{ t('uploadBulk.supportedFormats') }}
                 </p>
                 <p class="text-sm text-gray-500 mt-2">
-                  You can select multiple files at once
+                  {{ t('uploadBulk.selectMultiple') }}
                 </p>
               </div>
             </div>
@@ -56,10 +56,10 @@
               <div class="text-4xl">✅</div>
               <div>
                 <p class="text-lg font-medium mb-1">
-                  {{ selectedFiles.length }} file{{ selectedFiles.length > 1 ? 's' : '' }} selected
+                  {{ selectedFiles.length }} {{ t('uploadBulk.filesSelected') }}
                 </p>
                 <p class="text-sm text-gray-400">
-                  Total size: {{ formatFileSize(totalSize) }}
+                  {{ t('uploadBulk.totalSize') }}: {{ formatFileSize(totalSize) }}
                 </p>
               </div>
               <button
@@ -67,7 +67,7 @@
                 @click.stop="clearFiles"
                 class="text-sm text-red-400 hover:text-red-300"
               >
-                Clear all files
+                {{ t('uploadBulk.clearAllFiles') }}
               </button>
             </div>
           </div>
@@ -80,7 +80,7 @@
         <!-- Selected Files List -->
         <div v-if="selectedFiles.length > 0" class="space-y-3">
           <label class="block text-sm font-medium text-gray-300">
-            Selected Files ({{ selectedFiles.length }})
+            {{ t('uploadBulk.selectedFiles') }} ({{ selectedFiles.length }})
           </label>
           <div class="space-y-2 max-h-64 overflow-y-auto">
             <div
@@ -98,7 +98,7 @@
                 class="ml-4 text-red-400 hover:text-red-300 text-sm"
                 :disabled="uploading"
               >
-                Remove
+                {{ t('uploadBulk.remove') }}
               </button>
             </div>
           </div>
@@ -108,7 +108,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label for="global-title" class="block text-sm font-medium text-gray-300 mb-2">
-              Title Prefix (optional)
+              {{ t('uploadBulk.titlePrefix') }}
             </label>
             <input
               id="global-title"
@@ -116,17 +116,17 @@
               type="text"
               maxlength="255"
               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Will be used as prefix for all videos..."
+              :placeholder="t('uploadBulk.titlePrefixPlaceholder')"
               :disabled="uploading"
             />
             <p class="mt-1 text-xs text-gray-500">
-              If provided, will be used as: "{prefix} - {filename}"
+              {{ t('uploadBulk.titlePrefixHint') }}
             </p>
           </div>
 
           <div>
             <label for="global-description" class="block text-sm font-medium text-gray-300 mb-2">
-              Description (optional)
+              {{ t('uploadBulk.description') }}
             </label>
             <textarea
               id="global-description"
@@ -134,7 +134,7 @@
               rows="3"
               maxlength="1000"
               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              placeholder="Applied to all videos..."
+              :placeholder="t('uploadBulk.descriptionPlaceholder')"
               :disabled="uploading"
             />
           </div>
@@ -153,7 +153,7 @@
         <!-- Upload Progress Overview -->
         <div v-if="uploading" class="space-y-4">
           <div class="flex justify-between text-sm text-gray-400">
-            <span>Uploading videos...</span>
+            <span>{{ t('uploadBulk.uploadingVideos') }}</span>
             <span>{{ completedUploads }} / {{ selectedFiles.length }}</span>
           </div>
           <div class="w-full bg-gray-800 rounded-full h-2">
@@ -183,10 +183,10 @@
                     'bg-gray-700 text-gray-400'
                   ]"
                 >
-                  {{ status.status === 'completed' ? '✓ Done' :
-                      status.status === 'uploading' ? 'Uploading...' :
-                      status.status === 'error' ? '✗ Failed' :
-                      'Pending' }}
+                  {{ status.status === 'completed' ? t('uploadBulk.done') :
+                      status.status === 'uploading' ? t('uploadBulk.uploadingStatus') :
+                      status.status === 'error' ? t('uploadBulk.failed') :
+                      t('uploadBulk.pending') }}
                 </span>
               </div>
               <div v-if="status.status === 'uploading'" class="w-full bg-gray-700 rounded-full h-1.5 mt-2">
@@ -236,6 +236,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import { useAuthStore } from '~/stores/auth'
+import { useI18n } from '~/composables/useI18n'
 
 definePageMeta({
   middleware: 'auth',
@@ -243,6 +244,7 @@ definePageMeta({
 
 const videosStore = useVideosStore()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 // Ensure auth store is initialized
 onMounted(() => {
@@ -404,14 +406,14 @@ const handleUpload = async () => {
   
   // Check if user is authenticated
   if (!authStore.isAuthenticated) {
-    error.value = 'You must be logged in to upload videos. Please log in and try again.'
+    error.value = t('uploadBulk.mustBeLoggedIn')
     return
   }
   
   // Verify token exists
   const token = authStore.token || (process.client ? localStorage.getItem('token') : null)
   if (!token) {
-    error.value = 'Authentication token not found. Please log in again.'
+    error.value = t('uploadBulk.authTokenNotFound')
     navigateTo('/login')
     return
   }
@@ -481,11 +483,11 @@ const handleUpload = async () => {
   const failCount = uploadResults.filter(r => !r.success).length
   
   if (successCount > 0 && failCount === 0) {
-    success.value = `Successfully uploaded all ${successCount} video(s)! Processing has started.`
+    success.value = t('uploadBulk.successAll').replace('{count}', String(successCount))
   } else if (successCount > 0) {
-    success.value = `Uploaded ${successCount} video(s) successfully. ${failCount} failed.`
+    success.value = t('uploadBulk.successPartial').replace('{success}', String(successCount)).replace('{failed}', String(failCount))
   } else {
-    error.value = `Failed to upload all videos. Please try again.`
+    error.value = t('uploadBulk.failedAll')
   }
   
   // Redirect to profile page after 5 seconds if all succeeded

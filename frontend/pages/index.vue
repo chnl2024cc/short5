@@ -3,13 +3,13 @@
     <!-- Top Navigation Bar -->
     <div class="absolute top-0 left-0 right-0 z-40 bg-gradient-to-b from-black/80 to-transparent px-4 py-3">
       <div class="flex items-center justify-between">
-        <h1 class="text-xl font-bold text-white">Short5</h1>
+        <h1 class="text-xl font-bold text-white">{{ t('index.title') }}</h1>
         <div class="flex items-center gap-4">
           <!-- Liked Videos Link - Available for everyone (authenticated users see server-side, unauthenticated see localStorage) -->
           <NuxtLink
             to="/liked"
             class="text-white hover:text-blue-400 transition-colors"
-            title="Liked Videos"
+            :title="t('index.likedVideos')"
           >
             <svg
               class="w-6 h-6"
@@ -23,7 +23,7 @@
             v-if="authStore.isAuthenticated"
             to="/profile"
             class="text-white hover:text-blue-400 transition-colors"
-            title="Profile"
+            :title="t('index.profile')"
           >
             <svg
               class="w-6 h-6"
@@ -43,15 +43,15 @@
             v-if="!authStore.isAuthenticated"
             to="/login"
             class="text-white hover:text-blue-400 transition-colors text-sm font-medium"
-            title="Login"
+            :title="t('index.login')"
           >
-            Login
+            {{ t('index.login') }}
           </NuxtLink>
           <NuxtLink
             v-if="authStore.user?.is_admin"
             to="/admin"
             class="text-white hover:text-blue-400 transition-colors"
-            title="Admin Dashboard"
+            :title="t('index.adminDashboard')"
           >
             <svg
               class="w-6 h-6"
@@ -100,6 +100,7 @@
 
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
+import { useI18n } from '~/composables/useI18n'
 
 // Main feed page - accessible to everyone (anonymous users can view)
 definePageMeta({
@@ -107,6 +108,7 @@ definePageMeta({
 })
 
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 // Initialize auth store on mount
 onMounted(() => {

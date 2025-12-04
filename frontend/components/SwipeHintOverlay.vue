@@ -7,16 +7,16 @@
       <div class="swipe-hint-container">
         <!-- Center Main Message -->
         <div class="swipe-hint-center">
-          <div class="swipe-hint-main-text">Swipe to navigate</div>
+          <div class="swipe-hint-main-text">{{ t('swipeHint.swipeToNavigate') }}</div>
           <div class="swipe-hint-arrows">
             <div class="swipe-hint-arrow swipe-hint-arrow-left">
               <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
               </svg>
-              <span class="arrow-label">Pass</span>
+              <span class="arrow-label">{{ t('swipeHint.pass') }}</span>
             </div>
             <div class="swipe-hint-arrow swipe-hint-arrow-right">
-              <span class="arrow-label">Like</span>
+              <span class="arrow-label">{{ t('swipeHint.like') }}</span>
               <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
               </svg>
@@ -33,7 +33,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <div class="card-text">Swipe Left</div>
+            <div class="card-text">{{ t('swipeHint.swipeLeft') }}</div>
           </div>
           
           <!-- Right Action Card -->
@@ -43,7 +43,7 @@
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
               </svg>
             </div>
-            <div class="card-text">Swipe Right</div>
+            <div class="card-text">{{ t('swipeHint.swipeRight') }}</div>
           </div>
         </div>
         
@@ -51,7 +51,7 @@
         <button
           @click.stop="handleDismiss"
           class="swipe-hint-dismiss"
-          aria-label="Dismiss hint"
+          :aria-label="t('swipeHint.dismiss')"
         >
           <svg class="dismiss-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
@@ -64,6 +64,7 @@
 
 <script setup lang="ts">
 import { defineProps, defineEmits } from 'vue'
+import { useI18n } from '~/composables/useI18n'
 
 const props = defineProps<{
   show: boolean
@@ -72,6 +73,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   dismiss: []
 }>()
+
+const { t } = useI18n()
 
 const handleDismiss = () => {
   emit('dismiss')

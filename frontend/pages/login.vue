@@ -2,15 +2,15 @@
   <div class="min-h-screen flex items-center justify-center bg-black px-4">
     <div class="w-full max-w-md">
       <div class="text-center mb-8">
-        <h1 class="text-4xl font-bold text-white mb-2">Short-Video</h1>
-        <p class="text-gray-400">Sign in to continue</p>
+        <h1 class="text-4xl font-bold text-white mb-2">{{ t('login.title') }}</h1>
+        <p class="text-gray-400">{{ t('login.subtitle') }}</p>
       </div>
 
       <div class="bg-gray-900 rounded-lg p-8 shadow-xl">
         <form @submit.prevent="handleLogin" class="space-y-6">
           <div>
             <label for="email" class="block text-sm font-medium text-gray-300 mb-2">
-              Email
+              {{ t('login.email') }}
             </label>
             <input
               id="email"
@@ -18,14 +18,14 @@
               type="email"
               required
               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="your@email.com"
+              :placeholder="t('login.emailPlaceholder')"
               :disabled="loading"
             />
           </div>
 
           <div>
             <label for="password" class="block text-sm font-medium text-gray-300 mb-2">
-              Password
+              {{ t('login.password') }}
             </label>
             <input
               id="password"
@@ -34,7 +34,7 @@
               required
               minlength="8"
               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
+              :placeholder="t('login.passwordPlaceholder')"
               :disabled="loading"
             />
           </div>
@@ -48,16 +48,16 @@
             :disabled="loading || !form.email || !form.password"
             class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200"
           >
-            <span v-if="loading">Signing in...</span>
-            <span v-else>Sign In</span>
+            <span v-if="loading">{{ t('login.signingIn') }}</span>
+            <span v-else>{{ t('login.signIn') }}</span>
           </button>
         </form>
 
         <div class="mt-6 text-center">
           <p class="text-gray-400 text-sm">
-            Don't have an account?
+            {{ t('login.noAccount') }}
             <NuxtLink to="/register" class="text-blue-500 hover:text-blue-400 font-medium">
-              Sign up
+              {{ t('login.signUp') }}
             </NuxtLink>
           </p>
         </div>
@@ -69,6 +69,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '~/stores/auth'
+import { useI18n } from '~/composables/useI18n'
 
 definePageMeta({
   layout: false,
@@ -76,6 +77,7 @@ definePageMeta({
 })
 
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const form = ref({
   email: '',
@@ -94,7 +96,7 @@ const handleLogin = async () => {
     // Redirect to feed
     await navigateTo('/')
   } catch (err: any) {
-    error.value = err.message || 'Invalid email or password'
+    error.value = err.message || t('login.invalidCredentials')
   } finally {
     loading.value = false
   }

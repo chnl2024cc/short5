@@ -22,13 +22,13 @@
               />
             </svg>
           </NuxtLink>
-          <h1 class="text-2xl font-bold">Profile</h1>
+          <h1 class="text-2xl font-bold">{{ t('profile.title') }}</h1>
         </div>
         <button
           @click="handleLogout"
           class="text-gray-400 hover:text-white transition-colors text-sm"
         >
-          Logout
+          {{ t('profile.logout') }}
         </button>
       </div>
     </div>
@@ -40,7 +40,7 @@
         v-if="profilePending"
         class="flex items-center justify-center py-20"
       >
-        <div class="text-gray-400 text-lg">Loading profile...</div>
+        <div class="text-gray-400 text-lg">{{ t('profile.loadingProfile') }}</div>
       </div>
 
       <!-- Profile Error State -->
@@ -49,13 +49,13 @@
         class="bg-red-900/50 border border-red-700 rounded-lg p-6 text-center"
       >
         <p class="text-red-300 mb-4">
-          {{ profileError.message || 'Failed to load profile' }}
+          {{ profileError.message || t('profile.failedToLoad') }}
         </p>
         <button
           @click="handleRefreshProfile"
           class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
         >
-          Retry
+          {{ t('common.retry') }}
         </button>
       </div>
 
@@ -74,7 +74,7 @@
               <h2 class="text-3xl font-bold mb-2">{{ profile.username || 'User' }}</h2>
               <p class="text-gray-400 mb-4">{{ profile.email || '' }}</p>
               <p v-if="profile.created_at" class="text-sm text-gray-500">
-                Joined {{ formatDate(profile.created_at) }}
+                {{ t('profile.joined') }} {{ formatDate(profile.created_at) }}
               </p>
             </div>
           </div>
@@ -86,21 +86,21 @@
             <div class="text-3xl font-bold text-blue-400 mb-2">
               {{ profile.stats?.videos_uploaded || 0 }}
             </div>
-            <div class="text-sm text-gray-400">Videos Uploaded</div>
+            <div class="text-sm text-gray-400">{{ t('profile.videosUploaded') }}</div>
           </div>
           
           <div class="bg-gray-900 rounded-lg p-6 text-center">
             <div class="text-3xl font-bold text-red-400 mb-2">
               {{ formatNumber(profile.stats?.total_likes_received || 0) }}
             </div>
-            <div class="text-sm text-gray-400">Likes Received</div>
+            <div class="text-sm text-gray-400">{{ t('profile.likesReceived') }}</div>
           </div>
           
           <div class="bg-gray-900 rounded-lg p-6 text-center">
             <div class="text-3xl font-bold text-green-400 mb-2">
               {{ formatNumber(profile.stats?.total_views || 0) }}
             </div>
-            <div class="text-sm text-gray-400">Total Views</div>
+            <div class="text-sm text-gray-400">{{ t('profile.totalViews') }}</div>
           </div>
         </div>
 
@@ -123,7 +123,7 @@
                 d="M12 4v16m8-8H4"
               />
             </svg>
-            Upload Video
+            {{ t('profile.uploadVideo') }}
           </NuxtLink>
           
           <NuxtLink
@@ -143,7 +143,7 @@
                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
               />
             </svg>
-            Bulk Upload
+            {{ t('profile.bulkUpload') }}
           </NuxtLink>
           
           <NuxtLink
@@ -157,19 +157,19 @@
             >
               <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
             </svg>
-            Liked Videos
+            {{ t('profile.likedVideos') }}
           </NuxtLink>
         </div>
 
         <!-- My Videos Section -->
         <div class="mt-8">
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-xl font-bold">My Videos</h3>
+            <h3 class="text-xl font-bold">{{ t('profile.myVideos') }}</h3>
             <NuxtLink
               to="/upload"
               class="text-blue-400 hover:text-blue-300 text-sm"
             >
-              Upload New
+              {{ t('profile.uploadNew') }}
             </NuxtLink>
           </div>
 
@@ -178,7 +178,7 @@
             v-if="videosPending && videos.length === 0"
             class="text-center py-8 text-gray-400"
           >
-            Loading videos...
+            {{ t('profile.loadingVideos') }}
           </div>
 
           <!-- Videos Error -->
@@ -186,7 +186,7 @@
             v-else-if="videosError && videos.length === 0"
             class="bg-gray-900 rounded-lg p-6 text-center text-gray-400"
           >
-            <p>Failed to load videos. <button @click="refreshVideos" class="text-blue-400 hover:text-blue-300 underline">Retry</button></p>
+            <p>{{ t('profile.failedToLoadVideos') }} <button @click="refreshVideos" class="text-blue-400 hover:text-blue-300 underline">{{ t('common.retry') }}</button></p>
           </div>
 
           <!-- Empty State -->
@@ -195,15 +195,15 @@
             class="bg-gray-900 rounded-lg p-12 text-center"
           >
             <div class="text-6xl mb-4">📹</div>
-            <h4 class="text-xl font-bold mb-2">No videos yet</h4>
+            <h4 class="text-xl font-bold mb-2">{{ t('profile.noVideosYet') }}</h4>
             <p class="text-gray-400 mb-6">
-              Start sharing your content with the community
+              {{ t('profile.noVideosDescription') }}
             </p>
             <NuxtLink
               to="/upload"
               class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
             >
-              Upload Your First Video
+              {{ t('profile.uploadFirstVideo') }}
             </NuxtLink>
           </div>
 
@@ -245,7 +245,7 @@
                   @click.stop="handleDeleteVideo(video)"
                   :disabled="isDeleting === video.id"
                   class="bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white p-2 rounded-full"
-                  title="Delete video"
+                  :title="t('profile.deleteVideo')"
                 >
                 <svg
                   v-if="isDeleting !== video.id"
@@ -282,7 +282,7 @@
               <div class="relative aspect-[9/16] bg-gray-800">
                 <img
                   :src="getAbsoluteUrl(video.thumbnail)"
-                  :alt="video.title || 'Video thumbnail'"
+                  :alt="video.title || t('profile.videoThumbnail')"
                   class="w-full h-full object-cover"
                 />
                 <!-- Status Badge -->
@@ -305,7 +305,7 @@
               <!-- Video Info -->
               <div class="p-3">
                 <h4 class="font-semibold text-sm mb-1 line-clamp-2">
-                  {{ video.title || 'Untitled' }}
+                  {{ video.title || t('profile.untitled') }}
                 </h4>
                 <div class="flex items-center gap-4 text-xs text-gray-500">
                   <span class="flex items-center gap-1">
@@ -368,6 +368,7 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
 import { useVideosStore } from '~/stores/videos'
+import { useI18n } from '~/composables/useI18n'
 import type { Video, FeedResponse } from '~/types/video'
 
 definePageMeta({
@@ -376,6 +377,7 @@ definePageMeta({
 
 const authStore = useAuthStore()
 const api = useApi()
+const { t } = useI18n()
 
 // Helper to convert relative URLs to absolute URLs
 const config = useRuntimeConfig()
@@ -583,11 +585,11 @@ const formatDuration = (seconds: number): string => {
 
 const getStatusLabel = (status: string): string => {
   const statusMap: Record<string, string> = {
-    uploading: 'Uploading...',
-    processing: 'Processing...',
-    ready: 'Ready',
-    failed: 'Failed',
-    rejected: 'Rejected',
+    uploading: t('profile.uploading'),
+    processing: t('profile.processing'),
+    ready: t('profile.ready'),
+    failed: t('profile.failed'),
+    rejected: t('profile.rejected'),
   }
   return statusMap[status] || status
 }
@@ -619,7 +621,7 @@ const handleShareVideo = async (video: Video) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: video.title || 'Check out this video',
+          title: video.title || t('profile.checkOutVideo'),
           text: video.description || '',
           url: shareUrl,
         })
@@ -634,11 +636,11 @@ const handleShareVideo = async (video: Video) => {
     
     // Fall back to clipboard
     await navigator.clipboard.writeText(shareUrl)
-    alert('Link copied to clipboard!')
+    alert(t('profile.linkCopied'))
   } catch (error) {
     console.error('Failed to share video:', error)
     // Fallback: show the URL in an alert
-    alert(`Share this link: ${window.location.origin}/?video=${video.id}`)
+    alert(`${t('profile.shareLink')}: ${window.location.origin}/?video=${video.id}`)
   }
 }
 
@@ -669,7 +671,7 @@ const handleDeleteVideo = async (video: Video) => {
       data: error.response?.data,
       message: error.message
     })
-    const errorMessage = error.response?.data?.detail || error.message || 'Failed to delete video. Please try again.'
+    const errorMessage = error.response?.data?.detail || error.message || t('errors.generic')
     alert(errorMessage)
   } finally {
     isDeleting.value = null

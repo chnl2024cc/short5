@@ -7,7 +7,7 @@
       <div class="action-hint-container">
         <!-- Center Main Message -->
         <div class="action-hint-center">
-          <div class="action-hint-main-text">Try these actions</div>
+          <div class="action-hint-main-text">{{ t('actionHint.tryTheseActions') }}</div>
         </div>
         
         <!-- Action Cards with Jumping Arrows -->
@@ -19,7 +19,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <div class="card-text">Swipe Left</div>
+            <div class="card-text">{{ t('actionHint.swipeLeft') }}</div>
             <div class="jumping-arrow jumping-arrow-left">
               <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
@@ -34,7 +34,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
             </div>
-            <div class="card-text">Swipe Up</div>
+            <div class="card-text">{{ t('actionHint.swipeUp') }}</div>
             <div class="jumping-arrow jumping-arrow-up">
               <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7" />
@@ -49,7 +49,7 @@
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
               </svg>
             </div>
-            <div class="card-text">Swipe Right</div>
+            <div class="card-text">{{ t('actionHint.swipeRight') }}</div>
             <div class="jumping-arrow jumping-arrow-right">
               <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
@@ -62,7 +62,7 @@
         <button
           @click.stop="handleDismiss"
           class="action-hint-dismiss"
-          aria-label="Dismiss hint"
+          :aria-label="t('actionHint.dismiss')"
         >
           <svg class="dismiss-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
@@ -75,6 +75,7 @@
 
 <script setup lang="ts">
 import { defineProps, defineEmits } from 'vue'
+import { useI18n } from '~/composables/useI18n'
 
 const props = defineProps<{
   show: boolean
@@ -83,6 +84,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   dismiss: []
 }>()
+
+const { t } = useI18n()
 
 const handleDismiss = () => {
   emit('dismiss')

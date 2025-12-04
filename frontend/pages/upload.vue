@@ -3,8 +3,8 @@
     <div class="max-w-2xl mx-auto">
       <!-- Header -->
       <div class="mb-8">
-        <h1 class="text-3xl font-bold mb-2">Upload Video</h1>
-        <p class="text-gray-400">Share your video with the community</p>
+        <h1 class="text-3xl font-bold mb-2">{{ t('upload.title') }}</h1>
+        <p class="text-gray-400">{{ t('upload.subtitle') }}</p>
       </div>
 
       <!-- Upload Form -->
@@ -12,7 +12,7 @@
         <!-- File Upload Area -->
         <div>
           <label class="block text-sm font-medium text-gray-300 mb-2">
-            Video File
+            {{ t('upload.videoFile') }}
           </label>
           
           <!-- Drag & Drop Zone -->
@@ -40,10 +40,10 @@
               <div class="text-4xl">📹</div>
               <div>
                 <p class="text-lg font-medium mb-1">
-                  Drop your video here or click to browse
+                  {{ t('upload.dropVideo') }}
                 </p>
                 <p class="text-sm text-gray-400">
-                  Supported formats: MP4, MOV, AVI (Max 500MB)
+                  {{ t('upload.supportedFormats') }}
                 </p>
               </div>
             </div>
@@ -61,7 +61,7 @@
                 @click.stop="clearFile"
                 class="text-sm text-red-400 hover:text-red-300"
               >
-                Remove file
+                {{ t('upload.removeFile') }}
               </button>
             </div>
           </div>
@@ -73,7 +73,7 @@
 
         <!-- Video Preview -->
         <div v-if="selectedFile && videoPreviewUrl" class="space-y-2">
-          <label class="block text-sm font-medium text-gray-300">Preview</label>
+          <label class="block text-sm font-medium text-gray-300">{{ t('upload.preview') }}</label>
           <video
             :src="videoPreviewUrl"
             controls
@@ -85,7 +85,7 @@
         <!-- Title Input -->
         <div>
           <label for="title" class="block text-sm font-medium text-gray-300 mb-2">
-            Title (optional)
+            {{ t('upload.titleLabel') }}
           </label>
           <input
             id="title"
@@ -93,7 +93,7 @@
             type="text"
             maxlength="255"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Give your video a title..."
+            :placeholder="t('upload.titlePlaceholder')"
             :disabled="uploading"
           />
         </div>
@@ -101,7 +101,7 @@
         <!-- Description Input -->
         <div>
           <label for="description" class="block text-sm font-medium text-gray-300 mb-2">
-            Description (optional)
+            {{ t('upload.descriptionLabel') }}
           </label>
           <textarea
             id="description"
@@ -109,11 +109,11 @@
             rows="4"
             maxlength="1000"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            placeholder="Describe your video..."
+            :placeholder="t('upload.descriptionPlaceholder')"
             :disabled="uploading"
           />
           <p class="mt-1 text-xs text-gray-500">
-            {{ form.description?.length || 0 }} / 1000 characters
+            {{ form.description?.length || 0 }} / 1000 {{ t('upload.charactersCount') }}
           </p>
         </div>
 
@@ -130,7 +130,7 @@
         <!-- Upload Progress -->
         <div v-if="uploading && !uploadedVideoId" class="space-y-2">
           <div class="flex justify-between text-sm text-gray-400">
-            <span>Uploading...</span>
+            <span>{{ t('upload.uploading') }}</span>
             <span>{{ uploadProgress }}%</span>
           </div>
           <div class="w-full bg-gray-800 rounded-full h-2">
@@ -158,7 +158,7 @@
             class="flex-1 px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-lg transition-colors"
             :disabled="uploading"
           >
-            Cancel
+            {{ t('upload.cancel') }}
           </button>
           <button
             type="button"
@@ -166,8 +166,8 @@
             :disabled="!selectedFile || uploading"
             class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
           >
-            <span v-if="uploading">Uploading...</span>
-            <span v-else>Upload Video</span>
+            <span v-if="uploading">{{ t('upload.uploading') }}</span>
+            <span v-else>{{ t('upload.uploadVideo') }}</span>
           </button>
         </div>
       </div>
@@ -179,6 +179,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import { useAuthStore } from '~/stores/auth'
+import { useI18n } from '~/composables/useI18n'
 
 definePageMeta({
   middleware: 'auth',
@@ -186,6 +187,7 @@ definePageMeta({
 
 const videosStore = useVideosStore()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 // Ensure auth store is initialized
 onMounted(() => {
@@ -326,14 +328,14 @@ const handleUpload = async () => {
   
   // Check if user is authenticated
   if (!authStore.isAuthenticated) {
-    error.value = 'You must be logged in to upload videos. Please log in and try again.'
+    error.value = t('upload.mustBeLoggedIn')
     return
   }
   
   // Verify token exists
   const token = authStore.token || (process.client ? localStorage.getItem('token') : null)
   if (!token) {
-    error.value = 'Authentication token not found. Please log in again.'
+    error.value = t('upload.authTokenNotFound')
     navigateTo('/login')
     return
   }
@@ -364,20 +366,20 @@ const handleUpload = async () => {
     
     // Store the uploaded video ID for status monitoring
     uploadedVideoId.value = uploadResponse?.video_id || ''
-    success.value = 'Video uploaded successfully! Processing has started.'
+    success.value = t('upload.videoUploaded')
     uploading.value = false
   } catch (err: any) {
     if (progressInterval) {
       clearInterval(progressInterval)
     }
-    error.value = err.message || 'Upload failed. Please try again.'
+    error.value = err.message || t('errors.generic')
     uploading.value = false
     uploadProgress.value = 0
   }
 }
 
 const handleVideoReady = (videoData: any) => {
-  success.value = 'Video processing completed! Your video is now ready.'
+  success.value = t('upload.videoProcessingCompleted')
   
   // Redirect to profile page after 3 seconds to see the uploaded video
   setTimeout(() => {
@@ -386,7 +388,7 @@ const handleVideoReady = (videoData: any) => {
 }
 
 const handleVideoFailed = (errorMessage: string) => {
-  error.value = `Video processing failed: ${errorMessage}`
+  error.value = `${t('upload.videoProcessingFailed')}: ${errorMessage}`
   uploadedVideoId.value = null
 }
 

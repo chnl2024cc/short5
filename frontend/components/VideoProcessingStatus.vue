@@ -1,9 +1,9 @@
 <template>
   <div class="bg-gray-900 rounded-lg p-6 space-y-4">
     <div class="flex items-center justify-between">
-      <h3 class="text-lg font-semibold text-white">Processing Status</h3>
+      <h3 class="text-lg font-semibold text-white">{{ t('videoProcessing.title') }}</h3>
       <div class="text-sm text-gray-400">
-        Video ID: {{ videoId.substring(0, 8) }}...
+        {{ t('videoProcessing.videoId') }}: {{ videoId.substring(0, 8) }}...
       </div>
     </div>
 
@@ -18,11 +18,11 @@
           ]"
         />
         <div class="flex-1">
-          <div class="text-sm font-medium text-gray-300">Uploading</div>
-          <div class="text-xs text-gray-500">Uploading video file...</div>
+          <div class="text-sm font-medium text-gray-300">{{ t('videoProcessing.uploading') }}</div>
+          <div class="text-xs text-gray-500">{{ t('videoProcessing.uploadingDescription') }}</div>
         </div>
-        <div v-if="statusStep === 1" class="text-xs text-blue-400">In Progress</div>
-        <div v-else-if="statusStep > 1" class="text-xs text-green-400">✓ Complete</div>
+        <div v-if="statusStep === 1" class="text-xs text-blue-400">{{ t('videoProcessing.inProgress') }}</div>
+        <div v-else-if="statusStep > 1" class="text-xs text-green-400">{{ t('videoProcessing.complete') }}</div>
       </div>
 
       <!-- Processing Step -->
@@ -35,11 +35,11 @@
           ]"
         />
         <div class="flex-1">
-          <div class="text-sm font-medium text-gray-300">Processing</div>
+          <div class="text-sm font-medium text-gray-300">{{ t('videoProcessing.processing') }}</div>
           <div class="text-xs text-gray-500">{{ processingMessage }}</div>
         </div>
-        <div v-if="statusStep === 2" class="text-xs text-blue-400">In Progress</div>
-        <div v-else-if="statusStep > 2" class="text-xs text-green-400">✓ Complete</div>
+        <div v-if="statusStep === 2" class="text-xs text-blue-400">{{ t('videoProcessing.inProgress') }}</div>
+        <div v-else-if="statusStep > 2" class="text-xs text-green-400">{{ t('videoProcessing.complete') }}</div>
       </div>
 
       <!-- Ready Step -->
@@ -51,10 +51,10 @@
           ]"
         />
         <div class="flex-1">
-          <div class="text-sm font-medium text-gray-300">Ready</div>
-          <div class="text-xs text-gray-500">Video is ready to view</div>
+          <div class="text-sm font-medium text-gray-300">{{ t('videoProcessing.ready') }}</div>
+          <div class="text-xs text-gray-500">{{ t('videoProcessing.readyDescription') }}</div>
         </div>
-        <div v-if="statusStep >= 3" class="text-xs text-green-400">✓ Complete</div>
+        <div v-if="statusStep >= 3" class="text-xs text-green-400">{{ t('videoProcessing.complete') }}</div>
       </div>
     </div>
 
@@ -77,7 +77,7 @@
       <div class="flex items-start gap-2">
         <span class="text-red-400">⚠️</span>
         <div class="flex-1">
-          <div class="text-sm font-medium text-red-300">Processing Failed</div>
+          <div class="text-sm font-medium text-red-300">{{ t('videoProcessing.processingFailed') }}</div>
           <div class="text-xs text-red-400 mt-1">{{ errorReason }}</div>
         </div>
       </div>
@@ -87,14 +87,14 @@
     <div v-if="status === 'ready'" class="bg-green-900/50 border border-green-700 rounded-lg p-3">
       <div class="flex items-center gap-2">
         <span class="text-green-400">✓</span>
-        <div class="text-sm text-green-300">Video processing completed successfully!</div>
+        <div class="text-sm text-green-300">{{ t('videoProcessing.processingCompleted') }}</div>
       </div>
     </div>
 
     <!-- Polling Status -->
     <div v-if="isPolling" class="text-xs text-gray-500 flex items-center gap-2">
       <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-      <span>Checking status...</span>
+      <span>{{ t('videoProcessing.checkingStatus') }}</span>
     </div>
   </div>
 </template>
@@ -102,6 +102,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useVideosStore } from '~/stores/videos'
+import { useI18n } from '~/composables/useI18n'
 import type { Video, VideoStatus } from '~/types/video'
 
 interface Props {
@@ -122,6 +123,7 @@ const emit = defineEmits<{
 }>()
 
 const videosStore = useVideosStore()
+const { t } = useI18n()
 
 const status = ref<VideoStatus>('uploading')
 const errorReason = ref<string | null>(null)
