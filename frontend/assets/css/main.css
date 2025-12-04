@@ -5,15 +5,15 @@
 html {
   @apply h-full;
   /* Use dynamic viewport height for mobile browsers */
-  height: 100dvh;
   height: 100vh; /* Fallback for older browsers */
+  height: 100dvh;
 }
 
 body {
   @apply h-full;
   /* Use dynamic viewport height for mobile browsers */
-  height: 100dvh;
   height: 100vh; /* Fallback for older browsers */
+  height: 100dvh;
   /* Prevent overscroll bounce on iOS */
   overscroll-behavior: none;
   /* Don't add padding here - let containers handle safe areas individually */
@@ -29,11 +29,11 @@ body {
 .video-container {
   @apply relative w-full flex items-center justify-center bg-black;
   /* Use dynamic viewport height for mobile browsers */
-  height: 100dvh;
   height: 100vh; /* Fallback for older browsers */
+  height: 100dvh;
   /* Account for safe area insets */
-  min-height: 100dvh;
   min-height: 100vh; /* Fallback */
+  min-height: 100dvh;
 }
 
 /* Swipe overlay styles */
