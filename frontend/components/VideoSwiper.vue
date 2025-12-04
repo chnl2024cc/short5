@@ -185,6 +185,23 @@ const videosStore = useVideosStore()
 const swipeContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
 
+// Expose play method for external control (needed for iOS Safari autoplay)
+const playVideo = async () => {
+  if (!videoElement.value || isLoading.value || hasError.value) return false
+  try {
+    await videoElement.value.play()
+    return true
+  } catch (err) {
+    console.warn('Play failed:', err)
+    return false
+  }
+}
+
+// Expose methods for parent component
+defineExpose({
+  playVideo,
+})
+
 // Video state
 const isLoading = ref(true)
 const hasError = ref(false)
@@ -454,17 +471,23 @@ watch(
 // Watch for active state changes
 watch(
   () => props.isActive,
-  (isActive) => {
+  async (isActive) => {
     if (!videoElement.value) return
     
     if (isActive && !isLoading.value && !hasError.value) {
-      videoElement.value.play().catch((err) => {
-        console.warn('Play failed:', err)
-      })
+      // Try to play immediately
+      try {
+        await videoElement.value.play()
+      } catch (err: any) {
+        // If autoplay is blocked (iOS Safari), we'll need user interaction
+        // The play will be triggered by the swipe handler in VideoFeed
+        console.warn('Autoplay blocked, will need user interaction:', err)
+      }
     } else if (!isActive) {
       videoElement.value.pause()
     }
-  }
+  },
+  { immediate: true }
 )
 
 // Cleanup function
@@ -503,9 +526,10 @@ const onVideoLoadStart = () => {
 const onVideoLoaded = () => {
   isLoading.value = false
   if (videoElement.value && props.isActive) {
+    // Try to play immediately when video loads and is active
     videoElement.value.play().catch((err) => {
-      console.warn('Autoplay blocked:', err)
-      // Autoplay blocked, user interaction required
+      console.warn('Autoplay blocked on load:', err)
+      // Autoplay blocked, will be handled by swipe handler or user interaction
     })
   }
 }
@@ -513,6 +537,13 @@ const onVideoLoaded = () => {
 const onVideoCanPlay = () => {
   isLoading.value = false
   isBuffering.value = false
+  // Try to play when video can play and is active (important for iOS Safari)
+  if (videoElement.value && props.isActive && videoElement.value.paused) {
+    videoElement.value.play().catch((err) => {
+      // Silent fail - will be handled by user interaction or swipe handler
+      console.warn('Play failed on canplay:', err)
+    })
+  }
 }
 
 const onVideoPlaying = () => {

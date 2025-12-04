@@ -51,6 +51,7 @@
       <VideoSwiper
         v-for="(video, index) in visibleVideos"
         :key="video.id"
+        :ref="(el) => setVideoRef(el, index)"
         :video="video"
         :is-active="index === 0"
         class="absolute inset-0"
@@ -71,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
@@ -98,6 +99,16 @@ const maxSearchAttempts = 10 // Maximum number of feed loads to search for targe
 
 // Swipe hint management
 const { showSwipeHint, dismissSwipeHint, showHint, checkSwipeHint } = useSwipeHint()
+
+// Refs for VideoSwiper components to control playback
+const videoRefs = ref<Array<any>>([])
+
+// Set video ref helper
+const setVideoRef = (el: any, index: number) => {
+  if (el) {
+    videoRefs.value[index] = el
+  }
+}
 
 const visibleVideos = computed(() => {
   // Show current video + next preloadCount videos
@@ -233,8 +244,27 @@ const handleSwipe = async (direction: 'like' | 'not_like') => {
   const currentVideo = videos.value[currentIndex.value]
   if (!currentVideo) return
   
+  // IMPORTANT: Get reference to next video BEFORE removing current video
+  // The next video is at index 1 (since index 0 is the current one being swiped)
+  const nextVideoRef = videoRefs.value[1]
+  
   // Remove swiped video from feed
   videos.value.splice(currentIndex.value, 1)
+  
+  // IMPORTANT: Play the next video immediately while we still have user gesture context
+  // This is critical for iOS Safari which requires user interaction to play videos
+  // The next video is now at index 0 after the splice
+  await nextTick()
+  const activeVideoRef = videoRefs.value[0] || nextVideoRef
+  if (activeVideoRef && typeof activeVideoRef.playVideo === 'function') {
+    // Call playVideo immediately to use the swipe gesture context
+    // Use setTimeout(0) to ensure it runs in the same event loop but after DOM update
+    setTimeout(() => {
+      activeVideoRef.playVideo().catch((err: any) => {
+        console.warn('Failed to play next video after swipe:', err)
+      })
+    }, 0)
+  }
   
   // If we're at the end, try to load more
   if (currentIndex.value >= videos.value.length - preloadCount && hasMore.value) {
@@ -401,6 +431,24 @@ watch(
     // Load more when we're close to the end
     if (newIndex >= videos.value.length - preloadCount && hasMore.value && !loading.value) {
       loadFeed(nextCursor.value || undefined)
+    }
+  }
+)
+
+// Watch for video changes and ensure the active video plays (fallback for iOS Safari)
+watch(
+  () => visibleVideos.value[0]?.id,
+  async (newVideoId) => {
+    if (newVideoId) {
+      // Small delay to ensure DOM is updated
+      await nextTick()
+      const activeVideoRef = videoRefs.value[0]
+      if (activeVideoRef && typeof activeVideoRef.playVideo === 'function') {
+        // Try to play, but this might fail on iOS Safari without user gesture
+        activeVideoRef.playVideo().catch(() => {
+          // Silent fail - user will need to tap to play
+        })
+      }
     }
   }
 )
