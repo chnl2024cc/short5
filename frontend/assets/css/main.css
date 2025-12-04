@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @reference "tailwindcss";
 
+/* Safe area inset variables for iOS Safari compatibility */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+}
+
 /* Custom styles for mobile-first design */
 html {
   @apply h-full;
@@ -14,6 +22,8 @@ body {
   /* Use dynamic viewport height for mobile browsers */
   height: 100vh; /* Fallback for older browsers */
   height: 100dvh;
+  /* iOS Safari support for full viewport height */
+  height: -webkit-fill-available;
   /* Prevent overscroll bounce on iOS */
   overscroll-behavior: none;
   /* Don't add padding here - let containers handle safe areas individually */

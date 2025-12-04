@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-black text-white">
     <!-- Header -->
-    <div class="sticky top-0 z-10 bg-black/95 backdrop-blur-sm border-b border-gray-800 px-4 py-4" style="padding-top: calc(1rem + env(safe-area-inset-top));">
+    <div class="sticky top-0 z-10 bg-black/95 backdrop-blur-sm border-b border-gray-800 px-4 py-4" style="padding-top: max(calc(1rem + env(safe-area-inset-top)), 1rem);">
       <div class="flex items-center justify-between max-w-7xl mx-auto">
         <div class="flex items-center gap-4">
           <NuxtLink

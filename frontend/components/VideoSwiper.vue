@@ -109,8 +109,7 @@
     
     <!-- Video Info Overlay -->
     <div 
-      class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white z-30" 
-      style="padding: 1rem; padding-bottom: calc(1rem + env(safe-area-inset-bottom));"
+      class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white z-30 video-info-overlay"
     >
       <h3 v-if="video.title && video.title.trim() !== '' && video.title.toLowerCase() !== 'untitled'" class="font-bold text-lg">
         {{ video.title }}
@@ -134,7 +133,7 @@
       <div
         v-if="showShareNotification"
         class="absolute left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-40 animate-fade-in"
-        style="bottom: calc(4rem + env(safe-area-inset-bottom));"
+        style="bottom: max(calc(4rem + env(safe-area-inset-bottom)), 4rem);"
       >
         {{ t('videoSwiper.linkCopied') }}
       </div>
@@ -844,5 +843,12 @@ onUnmounted(() => {
 .touch-manipulation {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+.video-info-overlay {
+  padding: 1rem;
+  /* Use max() to ensure minimum padding while respecting safe area insets - works better in iOS Safari */
+  /* This pattern is required for iOS Safari to properly recognize env() values */
+  padding-bottom: max(calc(1rem + env(safe-area-inset-bottom)), 1rem);
 }
 </style>
