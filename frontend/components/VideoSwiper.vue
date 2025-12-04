@@ -135,12 +135,20 @@
         Link copied to clipboard!
       </div>
     </div>
+
+    <!-- Action Hint Overlay - Shows when video repeats second time -->
+    <ActionHintOverlay
+      :show="showActionHint"
+      @dismiss="dismissActionHint"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useVideosStore } from '~/stores/videos'
+import { useActionHint } from '~/composables/useActionHint'
+import ActionHintOverlay from './ActionHintOverlay.vue'
 import type { Video } from '~/types/video'
 
 const config = useRuntimeConfig()
@@ -185,6 +193,9 @@ const videosStore = useVideosStore()
 const swipeContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
 
+// Action hint management
+const { showActionHint, dismissActionHint, showHint: showActionHintHint } = useActionHint()
+
 // Expose play method for external control (needed for iOS Safari autoplay)
 const playVideo = async () => {
   if (!videoElement.value || isLoading.value || hasError.value) return false
@@ -210,6 +221,8 @@ const isRetrying = ref(false)
 const isBuffering = ref(false)
 const isVideoPaused = ref(false) // Track video paused state for play button overlay
 const showShareNotification = ref(false)
+const videoLoopCount = ref(0) // Track how many times video has looped
+const lastVideoTime = ref(0) // Track last video time to detect loops
 
 const retryCount = ref(0)
 const maxRetries = 3
@@ -358,6 +371,11 @@ const handleSwipeEnd = () => {
   const touchDuration = Date.now() - touchStartTime.value
   const isTap = absDeltaX < 10 && absDeltaY < 10 && touchDuration < 300 // Tap if movement < 10px and duration < 300ms
   
+  // Dismiss action hint when user interacts
+  if (showActionHint.value) {
+    dismissActionHint()
+  }
+  
   if (swipeDirection.value === 'share' && absDeltaY > threshold) {
     // Upward swipe completed - trigger share
     handleShare()
@@ -390,6 +408,8 @@ const initializeVideo = async (retry = false) => {
     hasError.value = false
     errorMessage.value = ''
     retryCount.value = 0
+    videoLoopCount.value = 0 // Reset loop count for new video
+    lastVideoTime.value = 0
   }
   
   isLoading.value = true
@@ -515,6 +535,9 @@ watch(
 
 // Cleanup function
 const cleanupVideo = () => {
+  // Reset loop tracking
+  videoLoopCount.value = 0
+  lastVideoTime.value = 0
   // Clear timeouts
   if (retryTimeout) {
     clearTimeout(retryTimeout)
@@ -600,6 +623,22 @@ const onTimeUpdate = () => {
   if (videoElement.value && props.isActive) {
     const seconds = Math.floor(videoElement.value.currentTime)
     emit('viewUpdate', seconds)
+    
+    // Detect video loop by checking if currentTime resets to near 0
+    const currentTime = videoElement.value.currentTime
+    const duration = videoElement.value.duration
+    
+    // If we were near the end and now we're near the start, video looped
+    if (duration > 0 && lastVideoTime.value > duration * 0.9 && currentTime < duration * 0.1) {
+      videoLoopCount.value++
+      
+      // Show action hint when video has looped once (played twice)
+      if (videoLoopCount.value === 1) {
+        showActionHintHint(500) // Show after 500ms delay
+      }
+    }
+    
+    lastVideoTime.value = currentTime
   }
 }
 
