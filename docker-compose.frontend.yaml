@@ -10,10 +10,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Build arguments - use .env variables or Coolify's SERVICE_URL_BACKEND
+        # Build arguments - use .env variables or Coolify's BACKEND_BASE_URL
         # These are baked into the build and cannot be changed at runtime
-        NUXT_PUBLIC_API_BASE_URL: ${SERVICE_URL_BACKEND}/api/v1
-        NUXT_PUBLIC_BACKEND_BASE_URL: ${SERVICE_URL_BACKEND}
+        NUXT_PUBLIC_API_BASE_URL: ${BACKEND_BASE_URL}/api/v1
+        NUXT_PUBLIC_BACKEND_BASE_URL: ${BACKEND_BASE_URL}
         NODE_ENV: ${NODE_ENV:-production}
     container_name: short5_frontend
     environment:
