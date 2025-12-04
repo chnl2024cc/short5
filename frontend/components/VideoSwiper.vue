@@ -175,7 +175,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  swiped: [direction: 'like' | 'not_like']
+  swiped: [direction: 'like' | 'not_like' | 'share']
   viewUpdate: [seconds: number]
   error: [error: Error]
   videoStarted: []
@@ -223,7 +223,7 @@ const startY = ref(0)
 const currentX = ref(0)
 const currentY = ref(0)
 const isDragging = ref(false)
-const swipeDirection = ref<'like' | 'not_like' | null>(null)
+const swipeDirection = ref<'like' | 'not_like' | 'share' | null>(null)
 const touchStartTime = ref(0)
 
 // Overlay state
@@ -231,15 +231,21 @@ const showOverlay = computed(() => isDragging.value && swipeDirection.value !== 
 const overlayClass = computed(() => {
   if (swipeDirection.value === 'like') return 'like'
   if (swipeDirection.value === 'not_like') return 'not-like'
+  if (swipeDirection.value === 'share') return 'share'
   return ''
 })
 const overlayText = computed(() => {
   if (swipeDirection.value === 'like') return 'LIKE'
   if (swipeDirection.value === 'not_like') return 'NOPE'
+  if (swipeDirection.value === 'share') return 'SHARE'
   return ''
 })
 const overlayOpacity = computed(() => {
   if (!isDragging.value) return 0
+  if (swipeDirection.value === 'share') {
+    const distance = Math.abs(currentY.value - startY.value)
+    return Math.min(distance / 150, 1)
+  }
   const distance = Math.abs(currentX.value - startX.value)
   return Math.min(distance / 150, 1)
 })
@@ -295,10 +301,21 @@ const onMouseMove = (e: MouseEvent) => {
 
 const updateSwipeDirection = () => {
   const deltaX = currentX.value - startX.value
-  const deltaY = Math.abs(currentY.value - startY.value)
+  const deltaY = currentY.value - startY.value
+  const absDeltaX = Math.abs(deltaX)
+  const absDeltaY = Math.abs(deltaY)
   
-  // Only consider horizontal swipes (ignore vertical scrolling)
-  if (Math.abs(deltaX) > deltaY && Math.abs(deltaX) > 50) {
+  // Determine swipe direction based on dominant axis
+  if (absDeltaY > absDeltaX && absDeltaY > 50) {
+    // Vertical swipe - check if upward
+    if (deltaY < 0) {
+      swipeDirection.value = 'share'
+    } else {
+      // Downward swipe - ignore (could be scrolling)
+      swipeDirection.value = null
+    }
+  } else if (absDeltaX > absDeltaY && absDeltaX > 50) {
+    // Horizontal swipe
     swipeDirection.value = deltaX > 0 ? 'like' : 'not_like'
   } else {
     swipeDirection.value = null
@@ -334,13 +351,19 @@ const handleSwipeEnd = () => {
   if (!isDragging.value) return
   
   const deltaX = currentX.value - startX.value
-  const deltaY = Math.abs(currentY.value - startY.value)
+  const deltaY = currentY.value - startY.value
+  const absDeltaX = Math.abs(deltaX)
+  const absDeltaY = Math.abs(deltaY)
   const threshold = 100 // Minimum swipe distance
   const touchDuration = Date.now() - touchStartTime.value
-  const isTap = Math.abs(deltaX) < 10 && deltaY < 10 && touchDuration < 300 // Tap if movement < 10px and duration < 300ms
+  const isTap = absDeltaX < 10 && absDeltaY < 10 && touchDuration < 300 // Tap if movement < 10px and duration < 300ms
   
-  if (Math.abs(deltaX) > threshold && swipeDirection.value) {
-    // Swipe completed
+  if (swipeDirection.value === 'share' && absDeltaY > threshold) {
+    // Upward swipe completed - trigger share
+    handleShare()
+    emit('swiped', 'share')
+  } else if (absDeltaX > threshold && (swipeDirection.value === 'like' || swipeDirection.value === 'not_like')) {
+    // Horizontal swipe completed
     emit('swiped', swipeDirection.value)
     // Vote on video
     videosStore.voteOnVideo(props.video.id, swipeDirection.value)
@@ -689,6 +712,10 @@ onUnmounted(() => {
 
 .swipe-overlay.not-like {
   @apply bg-red-500;
+}
+
+.swipe-overlay.share {
+  @apply bg-blue-500;
 }
 
 .swipe-overlay-text {

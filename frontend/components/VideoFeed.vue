@@ -236,13 +236,20 @@ const loadFeed = async (cursor?: string) => {
   }
 }
 
-const handleSwipe = async (direction: 'like' | 'not_like') => {
+const handleSwipe = async (direction: 'like' | 'not_like' | 'share') => {
   // Auto-dismiss hint on first swipe
   if (showSwipeHint.value) {
     dismissSwipeHint()
   }
   const currentVideo = videos.value[currentIndex.value]
   if (!currentVideo) return
+  
+  // Share swipe doesn't remove video from feed
+  if (direction === 'share') {
+    // Share functionality is handled in VideoSwiper component
+    // Video stays in feed, no need to remove or advance
+    return
+  }
   
   // IMPORTANT: Get reference to next video BEFORE removing current video
   // The next video is at index 1 (since index 0 is the current one being swiped)

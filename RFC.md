@@ -22,7 +22,10 @@ Ziel: **schnelles MVP**, skalierbar, modular erweiterbar, mit Tinder-artiger Swi
 
 - Mobile-first PWA, vertikaler Feed  
 - **Anonymous Access:** Feed ist ohne Login zugänglich für maximale Reichweite (z.B. geteilte Links in Messengern)
-- **Swipe-Mechanik:** Rechts = Like, Links = Nicht-Like (funktioniert auch ohne Account)
+- **Swipe-Mechanik:** 
+  - Rechts = Like (funktioniert auch ohne Account)
+  - Links = Nicht-Like (funktioniert auch ohne Account)
+  - Oben = Share (triggert Share-Funktionalität)
 - **Anonymous Voting:** Votes ohne Account werden in localStorage gespeichert und nach Login/Registrierung automatisch synchronisiert  
 - Infinite Scroll Feed  
 - **Video Preloading:** Nächstes Video (Thumbnail/Cover) wird bereits im Hintergrund geladen → flüssiges Übergangserlebnis  
@@ -52,11 +55,17 @@ Ziel: **schnelles MVP**, skalierbar, modular erweiterbar, mit Tinder-artiger Swi
 - Beim Swipen erscheint visuelles Feedback:  
   - Overlay „LIKE" bei Rechts-Swipe  
   - Overlay „NOPE" bei Links-Swipe  
+  - Overlay „SHARE" bei Oben-Swipe (triggert Share-Funktionalität)
 - Preloading: 1–2 Videos im Voraus, nächste Videos werden nachgeladen sobald nötig  
 - Swipe-Aktion: 
-  - **Mit Account:** POST `/videos/{id}/vote` mit direction = like | not_like (direkt)
-  - **Ohne Account:** Vote wird in localStorage gespeichert, Sync nach Login/Registrierung  
-- Geswiptes Video wird aus dem Feed entfernt, nächstes Video wird direkt angezeigt  
+  - **Rechts/Links:** 
+    - **Mit Account:** POST `/videos/{id}/vote` mit direction = like | not_like (direkt)
+    - **Ohne Account:** Vote wird in localStorage gespeichert, Sync nach Login/Registrierung  
+    - Geswiptes Video wird aus dem Feed entfernt, nächstes Video wird direkt angezeigt
+  - **Oben:** 
+    - Triggert Share-Funktionalität (gleiche Logik wie Share-Button)
+    - Nutzt Web Share API auf Mobile, Clipboard auf Desktop
+    - Video bleibt im Feed (keine Entfernung)
 - Optional: Animation + smooth Übergang für Tinder-ähnliches Feeling  
 - Onboarding: Erklärung der Swipe-Logik entfällt, da Tinder-Standard übernommen  
 
