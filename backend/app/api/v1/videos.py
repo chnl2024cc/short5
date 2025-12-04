@@ -328,59 +328,6 @@ async def upload_video(
     }
 
 
-@router.get("/{video_id}", response_model=VideoResponse)
-async def get_video(
-    video_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """Get video details"""
-    result = await db.execute(select(Video).where(Video.id == video_id))
-    video = result.scalar_one_or_none()
-    
-    if not video:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Video not found",
-        )
-    
-    # Get user
-    user_result = await db.execute(select(User).where(User.id == video.user_id))
-    user = user_result.scalar_one()
-    
-    # Get stats
-    likes_count = await db.execute(
-        select(func.count(Vote.id)).where(
-            Vote.video_id == video.id, cast(Vote.direction, String) == "like"
-        )
-    )
-    not_likes_count = await db.execute(
-        select(func.count(Vote.id)).where(
-            Vote.video_id == video.id, cast(Vote.direction, String) == "not_like"
-        )
-    )
-    views_count = await db.execute(
-        select(func.count(View.id)).where(View.video_id == video.id)
-    )
-    
-    return VideoResponse(
-        id=str(video.id),
-        title=video.title,
-        description=video.description,
-        status=video.status.value,
-        thumbnail=video.thumbnail,
-        url_mp4=video.url_mp4,
-        duration_seconds=video.duration_seconds,
-        error_reason=video.error_reason,  # Include error reason if video failed
-        user=UserBasic(id=str(user.id), username=user.username),
-        stats=VideoStats(
-            likes=likes_count.scalar() or 0,
-            not_likes=not_likes_count.scalar() or 0,
-            views=views_count.scalar() or 0,
-        ),
-        created_at=video.created_at,
-    )
-
-
 @router.post("/{video_id}/vote", response_model=VoteResponse)
 async def vote_on_video(
     video_id: str,
