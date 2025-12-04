@@ -1,0 +1,38 @@
+# Coolify Docker Compose Configuration
+# Note: Coolify automatically creates and manages networks for this compose file.
+# Services can communicate using Docker service names as hostnames (e.g., 'postgres', 'redis').
+# No explicit network definitions needed - Coolify handles network configuration automatically.
+
+services:
+  # Nuxt Frontend (Exposed via Traefik)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Build arguments - use .env variables or Coolify's SERVICE_URL_BACKEND
+        # These are baked into the build and cannot be changed at runtime
+        NUXT_PUBLIC_API_BASE_URL: ${SERVICE_URL_BACKEND}/api/v1
+        NUXT_PUBLIC_BACKEND_BASE_URL: ${SERVICE_URL_BACKEND}
+        NODE_ENV: ${NODE_ENV:-production}
+    container_name: short5_frontend
+    environment:
+      # Runtime environment variables (configurable via .env or PaaS)
+      NODE_ENV: ${NODE_ENV:-production}
+      HOST: 0.0.0.0
+      PORT: 3000
+      NUXT_TELEMETRY_DISABLED: 1
+      # Note: NUXT_PUBLIC_* variables are build-time only in Nuxt 3/4
+      # They must be set via build args above
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Use Node.js for health check (available in the image)
+      # Checks if the server responds with HTTP 200
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
