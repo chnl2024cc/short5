@@ -108,7 +108,7 @@ services:
   # Celery Flower - Monitoring (Optional: Internal or with Auth)
   flower:
     build:
-      context: ./backend
+      context: ./flower
       dockerfile: Dockerfile
     container_name: short5_flower
     environment:
@@ -118,7 +118,7 @@ services:
     depends_on:
       - redis
       - video_worker
-    command: celery -A app.celery_app flower --port=5555 --broker=redis://redis:6379/0 --address=0.0.0.0
+    command: celery flower --port=5555 --broker=redis://redis:6379/0 --address=0.0.0.0
     restart: unless-stopped
 
   # Nuxt Frontend (Exposed via Traefik)
@@ -153,6 +153,26 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
+
+  pgadmin:
+    image: 'dpage/pgadmin4:latest'
+    environment:
+      - SERVICE_URL_PGADMIN
+      - 'PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:?}'
+      - 'PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:?}'
+    volumes:
+      - 'pgadmin-data:/var/lib/pgadmin'
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '-qO-'
+        - 'http://localhost:80/login'
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      - postgres
 
 volumes:
   postgres_data:

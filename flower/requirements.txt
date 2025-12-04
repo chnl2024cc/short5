@@ -1,0 +1,4 @@
+# Flower - Celery monitoring and administration tool
+# Note: Celery includes redis client as a dependency when using Redis broker
+flower==2.0.1
+celery==5.3.4

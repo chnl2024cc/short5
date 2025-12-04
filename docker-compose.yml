@@ -105,7 +105,7 @@ services:
   # Celery Flower - Monitoring and Administration
   flower:
     build:
-      context: ./backend
+      context: ./flower
       dockerfile: Dockerfile
     container_name: short5_flower
     environment:
@@ -121,7 +121,7 @@ services:
       - short5_network
     # Use broker URL directly - Flower will discover all workers connected to the broker
     # Note: Flower monitors all workers on the broker, not just one app
-    command: celery -A app.celery_app flower --port=5555 --broker=redis://redis:6379/0 --address=0.0.0.0
+    command: celery flower --port=5555 --broker=redis://redis:6379/0 --address=0.0.0.0
 
   # Nuxt Frontend (Development)
   frontend:

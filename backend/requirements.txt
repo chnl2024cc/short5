@@ -19,7 +19,6 @@ python-multipart==0.0.6
 # Redis & Celery
 redis==5.0.1
 celery==5.3.4
-flower==2.0.1  # Celery monitoring and administration tool
 
 # Utilities
 python-dotenv==1.0.0
