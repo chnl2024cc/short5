@@ -641,15 +641,11 @@ onUnmounted(() => {
 
 .video-container {
   @apply relative w-full flex items-center justify-center bg-black touch-none;
-  /* Use dynamic viewport height for mobile browsers */
-  height: 100dvh;
-  height: 100vh; /* Fallback for older browsers */
-  min-height: 100dvh;
-  min-height: 100vh; /* Fallback */
+  /* Use 100% to fill parent container */
+  height: 100%;
+  min-height: 100%;
   user-select: none;
   -webkit-user-select: none;
-  /* Account for safe area insets on iOS */
-  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .swipe-overlay {

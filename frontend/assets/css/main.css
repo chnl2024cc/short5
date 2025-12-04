@@ -16,8 +16,7 @@ body {
   height: 100vh; /* Fallback for older browsers */
   /* Prevent overscroll bounce on iOS */
   overscroll-behavior: none;
-  /* Add safe area insets for iOS notch/home indicator */
-  padding-bottom: env(safe-area-inset-bottom);
+  /* Don't add padding here - let containers handle safe areas individually */
 }
 
 /* Swipe container styles */
