@@ -108,7 +108,10 @@
     </div>
     
     <!-- Video Info Overlay -->
-    <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent text-white z-30" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom));">
+    <div 
+      class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white z-30" 
+      style="padding: 1rem; padding-bottom: calc(1rem + env(safe-area-inset-bottom));"
+    >
       <h3 v-if="video.title && video.title.trim() !== '' && video.title.toLowerCase() !== 'untitled'" class="font-bold text-lg">
         {{ video.title }}
       </h3>
@@ -130,7 +133,8 @@
       <!-- Share notification -->
       <div
         v-if="showShareNotification"
-        class="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-40 animate-fade-in"
+        class="absolute left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-40 animate-fade-in"
+        style="bottom: calc(4rem + env(safe-area-inset-bottom));"
       >
         {{ t('videoSwiper.linkCopied') }}
       </div>
