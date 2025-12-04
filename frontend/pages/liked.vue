@@ -196,11 +196,17 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import { useI18n } from '~/composables/useI18n'
+import { useShareVideo } from '~/composables/useShareVideo'
 
 // No auth middleware - allow unauthenticated users to see their localStorage liked videos
 
 const videosStore = useVideosStore()
 const { t } = useI18n()
+
+// Share video functionality
+const { shareVideo } = useShareVideo({
+  translationPrefix: 'liked',
+})
 
 // Helper to convert relative URLs to absolute URLs
 const config = useRuntimeConfig()
@@ -287,36 +293,7 @@ const playVideo = (video: any) => {
 }
 
 const handleShareVideo = async (video: any) => {
-  if (!process.client) return
-  
-  try {
-    const shareUrl = `${window.location.origin}/?video=${video.id}`
-    
-    // Try to use Web Share API if available (mobile)
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: video.title || t('liked.checkOutVideo'),
-          text: video.description || '',
-          url: shareUrl,
-        })
-        return
-      } catch (err: any) {
-        // User cancelled or share failed, fall back to clipboard
-        if (err.name !== 'AbortError') {
-          console.warn('Web Share API failed:', err)
-        }
-      }
-    }
-    
-    // Fall back to clipboard
-    await navigator.clipboard.writeText(shareUrl)
-    alert(t('liked.linkCopied'))
-  } catch (error) {
-    console.error('Failed to share video:', error)
-    // Fallback: show the URL in an alert
-    alert(`${t('liked.shareLink')}: ${window.location.origin}/?video=${video.id}`)
-  }
+  await shareVideo(video)
 }
 
 // Infinite scroll using Intersection Observer

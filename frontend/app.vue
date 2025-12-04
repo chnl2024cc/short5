@@ -24,7 +24,9 @@ if (process.client) {
   min-height: 100vh; /* Fallback */
   min-height: 100svh; /* Small viewport (iOS toolbars visible) */
   min-height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
-  overflow: hidden;
+  /* Allow scrolling for pages that need it (profile/liked) */
+  /* Feed page (index.vue) has its own overflow: hidden on .page-container, so it still works */
+  overflow-y: auto;
 }
 </style>
 

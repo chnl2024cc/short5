@@ -149,6 +149,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import { useActionHint } from '~/composables/useActionHint'
 import { useI18n } from '~/composables/useI18n'
+import { useShareVideo } from '~/composables/useShareVideo'
 import ActionHintOverlay from './ActionHintOverlay.vue'
 import type { Video } from '~/types/video'
 
@@ -198,6 +199,24 @@ const { t } = useI18n()
 // Action hint management
 const { showActionHint, dismissActionHint, showHint: showActionHintHint } = useActionHint()
 
+// Share notification state
+const showShareNotification = ref(false)
+
+// Share video functionality with notification UI
+const { shareVideo } = useShareVideo({
+  onCopied: () => {
+    showShareNotification.value = true
+    setTimeout(() => {
+      showShareNotification.value = false
+    }, 2000)
+  },
+  translationPrefix: 'videoSwiper',
+})
+
+const handleShare = async () => {
+  await shareVideo(props.video)
+}
+
 // Expose play method for external control (needed for iOS Safari autoplay)
 const playVideo = async () => {
   if (!videoElement.value || isLoading.value || hasError.value) return false
@@ -222,7 +241,6 @@ const errorMessage = ref('')
 const isRetrying = ref(false)
 const isBuffering = ref(false)
 const isVideoPaused = ref(false) // Track video paused state for play button overlay
-const showShareNotification = ref(false)
 const videoLoopCount = ref(0) // Track how many times video has looped
 const lastVideoTime = ref(0) // Track last video time to detect loops
 
@@ -714,57 +732,6 @@ const onVideoPlay = () => {
   isVideoPaused.value = false
 }
 
-// Share video functionality
-const handleShare = async () => {
-  if (!process.client) return
-  
-  try {
-    const shareUrl = `${window.location.origin}/?video=${props.video.id}`
-    
-    // Try to use Web Share API if available (mobile/iOS Safari)
-    // IMPORTANT: This must be called synchronously within the user gesture context
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: props.video.title || t('videoSwiper.checkOutVideo'),
-          text: props.video.description || '',
-          url: shareUrl,
-        })
-        // Show success notification after share
-        showShareNotification.value = true
-        setTimeout(() => {
-          showShareNotification.value = false
-        }, 2000)
-        return
-      } catch (err: any) {
-        // User cancelled - don't show error, just return silently
-        if (err.name === 'AbortError') {
-          return
-        }
-        // Other errors - fall back to clipboard
-        console.warn('Web Share API failed:', err)
-      }
-    }
-    
-    // Fall back to clipboard
-    try {
-      await navigator.clipboard.writeText(shareUrl)
-      showShareNotification.value = true
-      setTimeout(() => {
-        showShareNotification.value = false
-      }, 2000)
-    } catch (clipboardError) {
-      // Clipboard API might not be available (some browsers/iOS versions)
-      console.error('Clipboard API failed:', clipboardError)
-      // Final fallback: show the URL in an alert
-      alert(`${t('videoSwiper.shareLink')}: ${shareUrl}`)
-    }
-  } catch (error) {
-    console.error('Failed to share video:', error)
-    // Fallback: show the URL in an alert
-    alert(`${t('videoSwiper.shareLink')}: ${window.location.origin}/?video=${props.video.id}`)
-  }
-}
 
 onMounted(() => {
   // Initialize video playback when component is mounted

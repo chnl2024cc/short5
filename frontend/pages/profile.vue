@@ -369,6 +369,7 @@ import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
 import { useVideosStore } from '~/stores/videos'
 import { useI18n } from '~/composables/useI18n'
+import { useShareVideo } from '~/composables/useShareVideo'
 import type { Video, FeedResponse } from '~/types/video'
 
 definePageMeta({
@@ -378,6 +379,11 @@ definePageMeta({
 const authStore = useAuthStore()
 const api = useApi()
 const { t } = useI18n()
+
+// Share video functionality
+const { shareVideo } = useShareVideo({
+  translationPrefix: 'profile',
+})
 
 // Helper to convert relative URLs to absolute URLs
 const config = useRuntimeConfig()
@@ -612,36 +618,7 @@ const viewVideo = (video: Video) => {
 }
 
 const handleShareVideo = async (video: Video) => {
-  if (!process.client) return
-  
-  try {
-    const shareUrl = `${window.location.origin}/?video=${video.id}`
-    
-    // Try to use Web Share API if available (mobile)
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: video.title || t('profile.checkOutVideo'),
-          text: video.description || '',
-          url: shareUrl,
-        })
-        return
-      } catch (err: any) {
-        // User cancelled or share failed, fall back to clipboard
-        if (err.name !== 'AbortError') {
-          console.warn('Web Share API failed:', err)
-        }
-      }
-    }
-    
-    // Fall back to clipboard
-    await navigator.clipboard.writeText(shareUrl)
-    alert(t('profile.linkCopied'))
-  } catch (error) {
-    console.error('Failed to share video:', error)
-    // Fallback: show the URL in an alert
-    alert(`${t('profile.shareLink')}: ${window.location.origin}/?video=${video.id}`)
-  }
+  await shareVideo(video)
 }
 
 const handleDeleteVideo = async (video: Video) => {
