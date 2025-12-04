@@ -2,9 +2,6 @@
   <div
     ref="swipeContainer"
     class="video-container"
-    @touchstart="onTouchStart"
-    @touchmove="onTouchMove"
-    @touchend="onTouchEnd"
     @mousedown="onMouseDown"
     @mousemove="onMouseMove"
     @mouseup="onMouseEnd"
@@ -307,15 +304,23 @@ const onTouchMove = (e: TouchEvent) => {
   const coords = getEventCoordinates(e)
   currentX.value = coords.x
   currentY.value = coords.y
+  
+  const deltaX = currentX.value - startX.value
+  const deltaY = currentY.value - startY.value
+  const absDeltaX = Math.abs(deltaX)
+  const absDeltaY = Math.abs(deltaY)
+  
   updateSwipeDirection()
   
-  // Only preventDefault if we detect a significant swipe to avoid interfering with iOS gestures
-  // This allows native gestures for small movements but prevents scrolling for swipes
+  // Prevent default scrolling behavior for swipes
+  // This is critical for iOS Safari - preventDefault() only works with { passive: false }
   if (e.touches.length === 1) {
-    const deltaX = Math.abs(currentX.value - startX.value)
-    const deltaY = Math.abs(currentY.value - startY.value)
-    // Only preventDefault if we've moved enough to be a deliberate swipe (not just a tap)
-    if (deltaX > 10 || deltaY > 10) {
+    // For upward swipes, be more aggressive with preventDefault to stop page scrolling
+    if (deltaY < 0 && absDeltaY > 20) {
+      // Upward swipe detected - prevent default to stop scrolling
+      e.preventDefault()
+    } else if (absDeltaX > 10 || absDeltaY > 10) {
+      // Other swipes - prevent default if we've moved enough to be a deliberate swipe
       e.preventDefault()
     }
   }
@@ -401,16 +406,18 @@ const handleSwipeEnd = () => {
     dismissActionHint()
   }
   
-  // Store share state before resetting
-  const shouldShare = swipeDirection.value === 'share' && absDeltaY > threshold
+  // Check for upward swipe: vertical swipe is dominant, distance exceeds threshold, and swipe is upward
+  // We check both swipeDirection.value and the actual deltaY to ensure we catch it even if direction wasn't set during move
+  const isUpwardSwipe = (swipeDirection.value === 'share' || (absDeltaY > absDeltaX && absDeltaY > threshold && deltaY < 0)) && absDeltaY > threshold
+  const isHorizontalSwipe = absDeltaX > absDeltaY && absDeltaX > threshold
   
-  if (shouldShare) {
+  if (isUpwardSwipe) {
     // Upward swipe completed - trigger share
     // IMPORTANT: Call handleShare synchronously to preserve user gesture context for iOS Safari
     // This is critical for navigator.share() to work on iOS
     handleShare()
     emit('swiped', 'share')
-  } else if (absDeltaX > threshold && (swipeDirection.value === 'like' || swipeDirection.value === 'not_like')) {
+  } else if (isHorizontalSwipe && (swipeDirection.value === 'like' || swipeDirection.value === 'not_like')) {
     // Horizontal swipe completed
     emit('swiped', swipeDirection.value)
     // Vote on video
@@ -765,10 +772,30 @@ onMounted(() => {
     nextTick(() => {
       initializeVideo()
     })
+    
+    // Add touch event listeners with { passive: false } for iOS Safari compatibility
+    // This is REQUIRED for preventDefault() to work on touchmove events
+    const container = swipeContainer.value
+    if (container) {
+      // touchstart can be passive (we don't call preventDefault there)
+      container.addEventListener('touchstart', onTouchStart, { passive: true })
+      // touchmove MUST be non-passive for preventDefault() to work on iOS Safari
+      container.addEventListener('touchmove', onTouchMove, { passive: false })
+      // touchend can be passive
+      container.addEventListener('touchend', onTouchEnd, { passive: true })
+    }
   }
 })
 
 onUnmounted(() => {
+  // Remove touch event listeners
+  const container = swipeContainer.value
+  if (container && process.client) {
+    container.removeEventListener('touchstart', onTouchStart)
+    container.removeEventListener('touchmove', onTouchMove)
+    container.removeEventListener('touchend', onTouchEnd)
+  }
+  
   // Complete cleanup
   cleanupVideo()
 })
@@ -779,7 +806,7 @@ onUnmounted(() => {
 
 .video-container {
   @apply relative w-full flex items-center justify-center bg-black touch-none;
-  /* Use 100% to fill parent container */
+  /* Fill parent container (feed-container) which fills page-container */
   height: 100%;
   min-height: 100%;
   user-select: none;

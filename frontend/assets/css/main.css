@@ -12,20 +12,27 @@
 /* Custom styles for mobile-first design */
 html {
   @apply h-full;
-  /* Use dynamic viewport height for mobile browsers */
+  /* Use proper viewport height cascade for mobile browsers (especially iOS Safari) */
   height: 100vh; /* Fallback for older browsers */
-  height: 100dvh;
+  height: 100svh; /* Small viewport (iOS toolbars visible) */
+  height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
 }
 
 body {
   @apply h-full;
-  /* Use dynamic viewport height for mobile browsers */
+  /* Use proper viewport height cascade for mobile browsers (especially iOS Safari) */
   height: 100vh; /* Fallback for older browsers */
-  height: 100dvh;
-  /* iOS Safari support for full viewport height */
+  height: 100svh; /* Small viewport (iOS toolbars visible) */
+  height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
+  /* iOS Safari support for full viewport height (legacy fallback) */
   height: -webkit-fill-available;
   /* Prevent overscroll bounce on iOS */
   overscroll-behavior: none;
+  /* Prevent pull-to-refresh on iOS */
+  overscroll-behavior-y: none;
+  /* Remove default margins */
+  margin: 0;
+  padding: 0;
   /* Don't add padding here - let containers handle safe areas individually */
 }
 
@@ -38,12 +45,14 @@ body {
 /* Video player container */
 .video-container {
   @apply relative w-full flex items-center justify-center bg-black;
-  /* Use dynamic viewport height for mobile browsers */
+  /* Use proper viewport height cascade for mobile browsers (especially iOS Safari) */
   height: 100vh; /* Fallback for older browsers */
-  height: 100dvh;
+  height: 100svh; /* Small viewport (iOS toolbars visible) */
+  height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
   /* Account for safe area insets */
   min-height: 100vh; /* Fallback */
-  min-height: 100dvh;
+  min-height: 100svh; /* Small viewport (iOS toolbars visible) */
+  min-height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
 }
 
 /* Swipe overlay styles */

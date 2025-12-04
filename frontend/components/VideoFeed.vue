@@ -489,7 +489,7 @@ watch(
 .feed-container {
   position: relative;
   width: 100%;
-  /* Use 100% to fill parent container instead of viewport */
+  /* Fill parent container (page-container) which uses viewport units */
   height: 100%;
   min-height: 100%;
   overflow: hidden;

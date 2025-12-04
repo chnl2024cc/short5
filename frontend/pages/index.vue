@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full bg-black relative" style="height: 100dvh; height: 100vh; min-height: 100dvh; min-height: 100vh; padding-bottom: env(safe-area-inset-bottom);">
+  <div class="w-full bg-black relative page-container">
     <!-- Top Navigation Bar -->
     <div class="absolute top-0 left-0 right-0 z-40 bg-gradient-to-b from-black/80 to-transparent px-4 py-3" style="padding-top: max(calc(0.75rem + env(safe-area-inset-top)), 0.75rem);">
       <div class="flex items-center justify-between">
@@ -124,4 +124,20 @@ onMounted(() => {
   }
 })
 </script>
+
+<style scoped>
+.page-container {
+  /* Use proper viewport height cascade for mobile browsers (especially iOS Safari) */
+  height: 100vh; /* Fallback for older browsers */
+  height: 100svh; /* Small viewport (iOS toolbars visible) */
+  height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
+  min-height: 100vh; /* Fallback */
+  min-height: 100svh; /* Small viewport (iOS toolbars visible) */
+  min-height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
+  /* Account for bottom safe area (home indicator) */
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
+  position: relative;
+}
+</style>
 

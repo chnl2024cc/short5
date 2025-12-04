@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="app-wrapper">
     <NuxtPage />
   </div>
 </template>
@@ -13,4 +13,18 @@ if (process.client) {
   authStore.initFromStorage()
 }
 </script>
+
+<style>
+.app-wrapper {
+  width: 100%;
+  /* Use proper viewport height cascade for mobile browsers (especially iOS Safari) */
+  height: 100vh; /* Fallback for older browsers */
+  height: 100svh; /* Small viewport (iOS toolbars visible) */
+  height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
+  min-height: 100vh; /* Fallback */
+  min-height: 100svh; /* Small viewport (iOS toolbars visible) */
+  min-height: 100dvh; /* Dynamic viewport (correct when bars collapse) */
+  overflow: hidden;
+}
+</style>
 
