@@ -193,6 +193,7 @@ const emit = defineEmits<{
 const videosStore = useVideosStore()
 const swipeContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
+const { t } = useI18n()
 
 // Action hint management
 const { showActionHint, dismissActionHint, showHint: showActionHintHint } = useActionHint()

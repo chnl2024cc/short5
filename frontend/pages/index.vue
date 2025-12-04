@@ -19,8 +19,17 @@
               <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
             </svg>
           </NuxtLink>
+          <!-- Show login link as default (SSR-safe), then update after mount based on auth state -->
           <NuxtLink
-            v-if="authStore.isAuthenticated"
+            v-if="!isMounted || !authStore.isAuthenticated"
+            to="/login"
+            class="text-white hover:text-blue-400 transition-colors text-sm font-medium"
+            :title="t('index.login')"
+          >
+            {{ t('index.login') }}
+          </NuxtLink>
+          <NuxtLink
+            v-if="isMounted && authStore.isAuthenticated"
             to="/profile"
             class="text-white hover:text-blue-400 transition-colors"
             :title="t('index.profile')"
@@ -40,15 +49,7 @@
             </svg>
           </NuxtLink>
           <NuxtLink
-            v-if="!authStore.isAuthenticated"
-            to="/login"
-            class="text-white hover:text-blue-400 transition-colors text-sm font-medium"
-            :title="t('index.login')"
-          >
-            {{ t('index.login') }}
-          </NuxtLink>
-          <NuxtLink
-            v-if="authStore.user?.is_admin"
+            v-if="isMounted && authStore.user?.is_admin"
             to="/admin"
             class="text-white hover:text-blue-400 transition-colors"
             :title="t('index.adminDashboard')"
@@ -73,13 +74,13 @@
 
     <VideoFeed />
     
-    <!-- Floating Upload Button (only for authenticated users) -->
+    <!-- Floating Upload Button (only for authenticated users, shown after mount) -->
     <NuxtLink
-      v-if="authStore.isAuthenticated"
+      v-if="isMounted && authStore.isAuthenticated"
       to="/upload"
       class="fixed right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all hover:scale-110"
       style="bottom: calc(1.5rem + env(safe-area-inset-bottom));"
-      title="Upload Video"
+      :title="t('index.uploadVideo')"
     >
       <svg
         class="w-6 h-6"
@@ -110,10 +111,16 @@ definePageMeta({
 const authStore = useAuthStore()
 const { t } = useI18n()
 
-// Initialize auth store on mount
+// Track if component is mounted to avoid hydration mismatches
+// During SSR and initial render, show safe default (login link)
+// After mount, initialize auth and show correct content
+const isMounted = ref(false)
+
 onMounted(() => {
   if (process.client) {
     authStore.initFromStorage()
+    // Set mounted flag after auth is initialized to trigger reactive update
+    isMounted.value = true
   }
 })
 </script>

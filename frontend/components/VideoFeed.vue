@@ -1,15 +1,7 @@
 <template>
   <div class="feed-container">
     <div
-      v-if="loading && videos.length === 0"
-      class="flex items-center justify-center"
-      style="height: 100%;"
-    >
-      <div class="text-white text-xl">{{ t('videoFeed.loadingFeed') }}</div>
-    </div>
-    
-    <div
-      v-else-if="videos.length === 0"
+      v-if="videos.length === 0 && !loading"
       class="flex flex-col items-center justify-center px-4"
       style="height: 100%;"
     >
@@ -33,7 +25,7 @@
             {{ t('videoFeed.viewLikedVideos') }}
           </NuxtLink>
           <NuxtLink
-            v-if="isAuthenticated"
+            v-if="isMounted && isAuthenticated"
             to="/upload"
             class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors w-full sm:w-auto text-center"
           >
@@ -68,6 +60,23 @@
         @dismiss="dismissSwipeHint"
       />
     </div>
+    
+    <!-- Loading Overlay - Shows when feed is loading -->
+    <Transition name="fade">
+      <div
+        v-if="loading"
+        class="loading-overlay"
+      >
+        <div class="loading-content">
+          <div class="spinner">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+          </div>
+          <p class="loading-text">{{ t('videoFeed.loadingFeed') }}</p>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -88,9 +97,15 @@ const { t } = useI18n()
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
+// Track if component is mounted to avoid hydration mismatches
+// During SSR and initial render, don't show auth-dependent content
+// After mount, initialize auth and show correct content
+const isMounted = ref(false)
+
 const videos = ref<Video[]>([])
 const currentIndex = ref(0)
-const loading = ref(false)
+// Start with loading true so overlay appears immediately on page load
+const loading = ref(true)
 const nextCursor = ref<string | null>(null)
 const hasMore = ref(true)
 const preloadCount = 2 // Preload next 2 videos
@@ -150,7 +165,9 @@ const loadTargetVideo = async (videoId: string) => {
 }
 
 const loadFeed = async (cursor?: string) => {
-  if (loading.value || (!hasMore.value && cursor)) return
+  // Only prevent loading more if already loading more (cursor provided)
+  // Initial load should proceed even if loading is true (we just set it)
+  if ((loading.value && cursor) || (!hasMore.value && cursor)) return
   
   loading.value = true
   try {
@@ -404,6 +421,12 @@ const refreshFeed = async () => {
 }
 
 onMounted(async () => {
+  // Initialize auth store from localStorage
+  if (process.client) {
+    authStore.initFromStorage()
+    // Set mounted flag after auth is initialized to trigger reactive update
+    isMounted.value = true
+  }
   await initializeFeed()
 })
 
@@ -477,5 +500,136 @@ watch(
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* Loading Overlay Styles */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  text-align: center;
+}
+
+/* Modern Spinner Animation */
+.spinner {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.spinner-ring:nth-child(1) {
+  animation-delay: -0.45s;
+}
+
+.spinner-ring:nth-child(2) {
+  animation-delay: -0.3s;
+  border-top-color: #60a5fa;
+  width: 80%;
+  height: 80%;
+  top: 10%;
+  left: 10%;
+}
+
+.spinner-ring:nth-child(3) {
+  animation-delay: -0.15s;
+  border-top-color: #93c5fd;
+  width: 60%;
+  height: 60%;
+  top: 20%;
+  left: 20%;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  margin: 0;
+}
+
+/* Fade Transition */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 640px) {
+  .spinner {
+    width: 56px;
+    height: 56px;
+  }
+  
+  .spinner-ring {
+    border-width: 2.5px;
+  }
+  
+  .loading-text {
+    font-size: 0.9rem;
+  }
+  
+  .loading-content {
+    gap: 1.25rem;
+  }
+}
+
+/* Small Mobile */
+@media (max-width: 375px) {
+  .spinner {
+    width: 48px;
+    height: 48px;
+  }
+  
+  .spinner-ring {
+    border-width: 2px;
+  }
+  
+  .loading-text {
+    font-size: 0.85rem;
+  }
 }
 </style>
