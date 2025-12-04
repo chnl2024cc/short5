@@ -19,8 +19,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Short-Video Platform API",
-    description="Backend API for Short-Video Platform",
+    title="Short5 Platform API",
+    description="Backend API for Short5 Platform",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -174,7 +174,7 @@ async def health_check():
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {"message": "Short-Video Platform API", "version": "1.0.0"}
+    return {"message": "Short5 Platform API", "version": "1.0.0"}
 
 
 if __name__ == "__main__":

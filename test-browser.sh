@@ -1,5 +1,5 @@
 #!/bin/bash
-# Browser Testing Script for Short-Video Platform
+# Browser Testing Script for Short5 Platform
 # This script ALWAYS restarts Docker containers and tests the application
 # 
 # IMPORTANT: Since we're developing in Docker containers, code changes require

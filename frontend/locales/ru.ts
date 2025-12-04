@@ -46,7 +46,7 @@ export const translations = {
 
   // Pages - Login
   login: {
-    title: 'Short-Video',
+    title: 'Short5',
     subtitle: 'Войдите, чтобы продолжить',
     email: 'Email',
     emailPlaceholder: 'your@email.com',
@@ -61,7 +61,7 @@ export const translations = {
 
   // Pages - Register
   register: {
-    title: 'Short-Video',
+    title: 'Short5',
     subtitle: 'Создайте свой аккаунт',
     username: 'Имя пользователя',
     usernamePlaceholder: 'username',

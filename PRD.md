@@ -1,8 +1,8 @@
-# **PRD – Short-Video Platform (Nuxt 4 + FastAPI)**
+# **PRD – Short5 Platform (Nuxt 4 + FastAPI)**
 
 ## 1. Executive Summary
 
-Ziel: Entwicklung einer **Short-Video Plattform** mit TikTok-ähnlicher UX für mobile Geräte. Nutzer können:
+Ziel: Entwicklung einer **Short5 Plattform** mit TikTok-ähnlicher UX für mobile Geräte. Nutzer können:
 
 * Accounts erstellen
 * Kurzvideos hochladen

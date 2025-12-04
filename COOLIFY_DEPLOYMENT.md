@@ -1,6 +1,6 @@
 # Coolify Deployment Guide
 
-This guide explains how to deploy the Short-Video Platform on Coolify using the provided `docker-compose.coolify.yaml` configuration.
+This guide explains how to deploy the Short5 Platform on Coolify using the provided `docker-compose.coolify.yaml` configuration.
 
 ## Prerequisites
 

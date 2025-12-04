@@ -1,4 +1,4 @@
-# API Specification – Short-Video Platform
+# API Specification – Short5 Platform
 
 ## Base URL
 - **Development:** `${BACKEND_BASE_URL}/api/v1` (default: `http://localhost:8000/api/v1`)

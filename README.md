@@ -1,4 +1,4 @@
-# Short-Video Platform
+# Short5 Platform
 
 A self-hosted, mobile-first short-video platform similar to TikTok, built with Nuxt 4 and FastAPI.
 

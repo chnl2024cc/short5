@@ -1,4 +1,4 @@
--- Short-Video Platform Database Schema
+-- Short5 Platform Database Schema
 -- PostgreSQL 14+
 
 -- Enable UUID extension

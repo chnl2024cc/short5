@@ -1,4 +1,4 @@
-# Browser Testing Script for Short-Video Platform (PowerShell)
+# Browser Testing Script for Short5 Platform (PowerShell)
 # This script ALWAYS restarts Docker containers and tests the application
 # 
 # IMPORTANT: Since we're developing in Docker containers, code changes require

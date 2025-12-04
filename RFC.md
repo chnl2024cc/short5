@@ -1,7 +1,7 @@
-# RFC – Short-Video Plattform (Nuxt 4 + FastAPI)
+# RFC – Short5 Plattform (Nuxt 4 + FastAPI)
 
 ## 1. Context
-Wir bauen eine self-hosted, mobile-first Short-Video Plattform ähnlich TikTok:
+Wir bauen eine self-hosted, mobile-first Short5 Plattform ähnlich TikTok:
 
 - **Frontend:** Nuxt 4 PWA  
 - **Backend:** FastAPI  

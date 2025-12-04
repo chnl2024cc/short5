@@ -31,11 +31,11 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Short-Video Platform',
+      title: 'Short5 Platform',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover' },
-        { name: 'description', content: 'Short-Video Platform - TikTok-like experience' },
+        { name: 'description', content: 'Short5 Platform - Short Video Swiper like Tinder experience' },
       ],
       link: [
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
