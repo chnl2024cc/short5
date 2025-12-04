@@ -268,7 +268,8 @@ const overlayOpacity = computed(() => {
 // Touch/Mouse handlers
 const getEventCoordinates = (e: TouchEvent | MouseEvent) => {
   if (e instanceof TouchEvent) {
-    const touch = e.touches[0]
+    // Use touches[0] for active touches, or changedTouches[0] as fallback (iOS Safari quirk)
+    const touch = e.touches?.[0] || e.changedTouches?.[0]
     if (touch) {
       return { x: touch.clientX, y: touch.clientY }
     }
@@ -299,11 +300,22 @@ const onMouseDown = (e: MouseEvent) => {
 
 const onTouchMove = (e: TouchEvent) => {
   if (!isDragging.value) return
-  e.preventDefault()
+  
   const coords = getEventCoordinates(e)
   currentX.value = coords.x
   currentY.value = coords.y
   updateSwipeDirection()
+  
+  // Only preventDefault if we detect a significant swipe to avoid interfering with iOS gestures
+  // This allows native gestures for small movements but prevents scrolling for swipes
+  if (e.touches.length === 1) {
+    const deltaX = Math.abs(currentX.value - startX.value)
+    const deltaY = Math.abs(currentY.value - startY.value)
+    // Only preventDefault if we've moved enough to be a deliberate swipe (not just a tap)
+    if (deltaX > 10 || deltaY > 10) {
+      e.preventDefault()
+    }
+  }
 }
 
 const onMouseMove = (e: MouseEvent) => {
@@ -337,7 +349,15 @@ const updateSwipeDirection = () => {
   }
 }
 
-const onTouchEnd = () => {
+const onTouchEnd = (e: TouchEvent) => {
+  // Update coordinates from touch end event (important for iOS Safari)
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    const touch = e.changedTouches[0]
+    if (touch) {
+      currentX.value = touch.clientX
+      currentY.value = touch.clientY
+    }
+  }
   handleSwipeEnd()
 }
 
@@ -378,8 +398,13 @@ const handleSwipeEnd = () => {
     dismissActionHint()
   }
   
-  if (swipeDirection.value === 'share' && absDeltaY > threshold) {
+  // Store share state before resetting
+  const shouldShare = swipeDirection.value === 'share' && absDeltaY > threshold
+  
+  if (shouldShare) {
     // Upward swipe completed - trigger share
+    // IMPORTANT: Call handleShare synchronously to preserve user gesture context for iOS Safari
+    // This is critical for navigator.share() to work on iOS
     handleShare()
     emit('swiped', 'share')
   } else if (absDeltaX > threshold && (swipeDirection.value === 'like' || swipeDirection.value === 'not_like')) {
@@ -686,7 +711,8 @@ const handleShare = async () => {
   try {
     const shareUrl = `${window.location.origin}/?video=${props.video.id}`
     
-    // Try to use Web Share API if available (mobile)
+    // Try to use Web Share API if available (mobile/iOS Safari)
+    // IMPORTANT: This must be called synchronously within the user gesture context
     if (navigator.share) {
       try {
         await navigator.share({
@@ -694,21 +720,35 @@ const handleShare = async () => {
           text: props.video.description || '',
           url: shareUrl,
         })
+        // Show success notification after share
+        showShareNotification.value = true
+        setTimeout(() => {
+          showShareNotification.value = false
+        }, 2000)
         return
       } catch (err: any) {
-        // User cancelled or share failed, fall back to clipboard
-        if (err.name !== 'AbortError') {
-          console.warn('Web Share API failed:', err)
+        // User cancelled - don't show error, just return silently
+        if (err.name === 'AbortError') {
+          return
         }
+        // Other errors - fall back to clipboard
+        console.warn('Web Share API failed:', err)
       }
     }
     
     // Fall back to clipboard
-    await navigator.clipboard.writeText(shareUrl)
-    showShareNotification.value = true
-    setTimeout(() => {
-      showShareNotification.value = false
-    }, 2000)
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      showShareNotification.value = true
+      setTimeout(() => {
+        showShareNotification.value = false
+      }, 2000)
+    } catch (clipboardError) {
+      // Clipboard API might not be available (some browsers/iOS versions)
+      console.error('Clipboard API failed:', clipboardError)
+      // Final fallback: show the URL in an alert
+      alert(`${t('videoSwiper.shareLink')}: ${shareUrl}`)
+    }
   } catch (error) {
     console.error('Failed to share video:', error)
     // Fallback: show the URL in an alert
@@ -741,6 +781,9 @@ onUnmounted(() => {
   min-height: 100%;
   user-select: none;
   -webkit-user-select: none;
+  /* Prevent default touch behaviors to allow custom swipe gestures on iOS Safari */
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .swipe-overlay {
