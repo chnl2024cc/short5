@@ -24,9 +24,7 @@ services:
       NUXT_TELEMETRY_DISABLED: 1
       # Note: NUXT_PUBLIC_* variables are build-time only in Nuxt 3/4
       # They must be set via build args above
-    depends_on:
-      backend:
-        condition: service_healthy
+
     healthcheck:
       # Use Node.js for health check (available in the image)
       # Checks if the server responds with HTTP 200
