@@ -250,9 +250,9 @@ const overlayClass = computed(() => {
   return ''
 })
 const overlayText = computed(() => {
-  if (swipeDirection.value === 'like') return 'LIKE'
-  if (swipeDirection.value === 'not_like') return 'NOPE'
-  if (swipeDirection.value === 'share') return 'SHARE'
+  if (swipeDirection.value === 'like') return t('videoSwiper.like')
+  if (swipeDirection.value === 'not_like') return t('videoSwiper.nope')
+  if (swipeDirection.value === 'share') return t('videoSwiper.share')
   return ''
 })
 const overlayOpacity = computed(() => {
