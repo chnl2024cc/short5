@@ -74,7 +74,7 @@
           <!-- Share Button -->
           <button
             @click.stop="handleShareVideo(video)"
-            class="absolute top-2 right-2 z-10 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white p-2 rounded-full touch-manipulation"
+            class="absolute top-2 right-2 z-5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white p-2 rounded-full touch-manipulation"
             title="Share video"
           >
             <svg

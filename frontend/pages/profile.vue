@@ -199,7 +199,7 @@
               @click="viewVideo(video)"
             >
               <!-- Action Buttons -->
-              <div class="absolute top-2 right-2 z-10 flex gap-2">
+              <div class="absolute top-2 right-2 z-5 flex gap-2">
                 <!-- Share Button -->
                 <button
                   @click.stop="handleShareVideo(video)"
