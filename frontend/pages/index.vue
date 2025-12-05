@@ -102,6 +102,9 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
 import { useI18n } from '~/composables/useI18n'
+import { useVideosStore } from '~/stores/videos'
+import { useRoute } from 'vue-router'
+import type { Video } from '~/types/video'
 
 // Main feed page - accessible to everyone (anonymous users can view)
 definePageMeta({
@@ -110,17 +113,109 @@ definePageMeta({
 
 const authStore = useAuthStore()
 const { t } = useI18n()
+const route = useRoute()
+const videosStore = useVideosStore()
 
 // Track if component is mounted to avoid hydration mismatches
 // During SSR and initial render, show safe default (login link)
 // After mount, initialize auth and show correct content
 const isMounted = ref(false)
 
-onMounted(() => {
+// Dynamic meta tags for video sharing
+const videoId = computed(() => route.query.video as string | undefined)
+const sharedVideo = ref<Video | null>(null)
+
+// Update meta tags when video is shared
+const ogImage = computed(() => {
+  if (sharedVideo.value?.thumbnail) {
+    const config = useRuntimeConfig()
+    const backendBaseUrl = config.public.backendBaseUrl
+    const thumbnailUrl = sharedVideo.value.thumbnail.startsWith('http')
+      ? sharedVideo.value.thumbnail
+      : `${backendBaseUrl}${sharedVideo.value.thumbnail}`
+    return thumbnailUrl
+  }
+  // Use absolute URL for default OG image
+  if (process.client) {
+    return `${window.location.origin}/og-image.svg`
+  }
+  return '/og-image.svg'
+})
+
+const ogUrl = computed(() => {
+  if (!process.client) return ''
+  if (videoId.value) {
+    return `${window.location.origin}/?video=${videoId.value}`
+  }
+  return window.location.origin
+})
+
+useHead({
+  title: computed(() => sharedVideo.value?.title 
+    ? `${sharedVideo.value.title} - Short5 Platform`
+    : 'Short5 Platform'),
+  meta: [
+    {
+      name: 'description',
+      content: computed(() => sharedVideo.value?.description 
+        ? sharedVideo.value.description
+        : 'Short5 Platform - Short Video Swiper like Tinder experience'),
+    },
+    {
+      property: 'og:title',
+      content: computed(() => sharedVideo.value?.title 
+        ? `${sharedVideo.value.title} - Short5 Platform`
+        : 'Short5 Platform - Share Amazing Videos'),
+    },
+    {
+      property: 'og:description',
+      content: computed(() => sharedVideo.value?.description 
+        ? sharedVideo.value.description
+        : 'Short5 Platform - Short Video Swiper like Tinder experience'),
+    },
+    {
+      property: 'og:image',
+      content: ogImage,
+    },
+    {
+      property: 'og:url',
+      content: ogUrl,
+    },
+    {
+      name: 'twitter:title',
+      content: computed(() => sharedVideo.value?.title 
+        ? `${sharedVideo.value.title} - Short5 Platform`
+        : 'Short5 Platform - Share Amazing Videos'),
+    },
+    {
+      name: 'twitter:description',
+      content: computed(() => sharedVideo.value?.description 
+        ? sharedVideo.value.description
+        : 'Short5 Platform - Short Video Swiper like Tinder experience'),
+    },
+    {
+      name: 'twitter:image',
+      content: ogImage,
+    },
+  ],
+})
+
+onMounted(async () => {
   if (process.client) {
     authStore.initFromStorage()
     // Set mounted flag after auth is initialized to trigger reactive update
     isMounted.value = true
+    
+    // Load video if shared via query parameter
+    if (videoId.value) {
+      try {
+        const video = await videosStore.getVideoStatus(videoId.value)
+        sharedVideo.value = video
+      } catch (error) {
+        // Video not found or error - will show default feed
+        console.warn('Failed to load shared video:', error)
+      }
+    }
   }
 })
 </script>

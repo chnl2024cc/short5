@@ -48,6 +48,7 @@ export const translations = {
   login: {
     title: 'Short5',
     subtitle: 'Войдите, чтобы продолжить',
+    backToFeed: 'Вернуться к ленте',
     email: 'Email',
     emailPlaceholder: 'your@email.com',
     password: 'Пароль',
@@ -63,6 +64,7 @@ export const translations = {
   register: {
     title: 'Short5',
     subtitle: 'Создайте свой аккаунт',
+    backToFeed: 'Вернуться к ленте',
     username: 'Имя пользователя',
     usernamePlaceholder: 'username',
     usernameHint: '3-30 символов, только буквы, цифры и _',
