@@ -3,7 +3,7 @@ Reports Endpoints (User-facing)
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, cast, String
 from typing import Optional
 from pydantic import BaseModel
 
@@ -69,10 +69,11 @@ async def create_report(
             )
     
     # Check if user already reported this target
+    # Cast report_type to String for PostgreSQL enum compatibility
     existing_report = await db.execute(
         select(Report).where(
             Report.reporter_id == current_user.id,
-            Report.report_type == report_type,
+            cast(Report.report_type, String) == report_type.value,
             Report.target_id == request.target_id,
         )
     )

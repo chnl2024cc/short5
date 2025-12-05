@@ -884,7 +884,7 @@ async def get_user_details(
     reports_against_count = await db.execute(
         select(func.count(Report.id)).where(
             and_(
-                Report.report_type == ReportType.USER,
+                cast(Report.report_type, String) == ReportType.USER.value,
                 Report.target_id == user.id
             )
         )
