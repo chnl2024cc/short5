@@ -38,7 +38,9 @@ export const useShareVideo = (options: ShareVideoOptions = {}) => {
     if (!process.client) return
 
     try {
-      const shareUrl = `${window.location.origin}/?video=${video.id}`
+      // Use composable for consistent URL generation
+      const { siteOrigin } = usePublicAsset()
+      const shareUrl = `${siteOrigin.value}/?video=${video.id}`
       const title = video.title || t(`${translationPrefix}.checkOutVideo`)
       const text = (video as Video).description || ''
 
@@ -87,8 +89,9 @@ export const useShareVideo = (options: ShareVideoOptions = {}) => {
     } catch (error) {
       console.error('Failed to share video:', error)
       // Fallback: show the URL in an alert
+      const { siteOrigin } = usePublicAsset()
       const shareLinkText = t(`${translationPrefix}.shareLink`) || 'Share link'
-      alert(`${shareLinkText}: ${window.location.origin}/?video=${video.id}`)
+      alert(`${shareLinkText}: ${siteOrigin.value}/?video=${video.id}`)
     }
   }
 

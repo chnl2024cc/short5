@@ -123,33 +123,79 @@ const isMounted = ref(false)
 
 // Dynamic meta tags for video sharing
 const videoId = computed(() => route.query.video as string | undefined)
-const sharedVideo = ref<Video | null>(null)
+const config = useRuntimeConfig()
+const backendBaseUrl = config.public.backendBaseUrl
 
-// Update meta tags when video is shared
+// Fetch video data server-side for proper meta tags (WhatsApp crawler needs this)
+const { data: sharedVideo } = await useAsyncData(
+  () => `video-${videoId.value || 'none'}`,
+  async () => {
+    const id = videoId.value
+    if (!id) return null
+    
+    try {
+      // Fetch video data server-side using direct API call
+      const apiBaseUrl = config.public.apiBaseUrl
+      const response = await $fetch<Video>(`${apiBaseUrl}/videos/${id}`, {
+        // Don't require auth for public video sharing
+        headers: {},
+      })
+      return response
+    } catch (error) {
+      // Video not found or error - return null to use default meta tags
+      console.warn('Failed to load shared video for meta tags:', error)
+      return null
+    }
+  },
+  {
+    // Only fetch if videoId is present
+    watch: [videoId],
+    // Fetch on server-side for WhatsApp crawler
+    server: true,
+    // Don't block navigation
+    lazy: true,
+    default: () => null,
+  }
+)
+
+// Use composable for public assets and site origin (Nuxt 4 best practice)
+const { getPublicAssetUrl, siteOrigin } = usePublicAsset()
+
+// Get absolute URL helper for backend assets (videos, thumbnails)
+const getAbsoluteUrl = (url: string | null | undefined, fallback: string): string => {
+  if (url) {
+    // If already absolute, return as-is
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    // If relative, prepend backend base URL
+    if (url.startsWith('/')) {
+      return `${backendBaseUrl}${url}`
+    }
+    // Otherwise, assume it's relative to backend
+    return `${backendBaseUrl}/${url}`
+  }
+  // Return absolute fallback URL for public assets
+  return getPublicAssetUrl(fallback).value
+}
+
+// Compute OG image URL (must be absolute for WhatsApp)
 const ogImage = computed(() => {
   if (sharedVideo.value?.thumbnail) {
-    const config = useRuntimeConfig()
-    const backendBaseUrl = config.public.backendBaseUrl
-    const thumbnailUrl = sharedVideo.value.thumbnail.startsWith('http')
-      ? sharedVideo.value.thumbnail
-      : `${backendBaseUrl}${sharedVideo.value.thumbnail}`
-    return thumbnailUrl
+    return getAbsoluteUrl(sharedVideo.value.thumbnail, '/og-image.svg')
   }
-  // Use absolute URL for default OG image
-  if (process.client) {
-    return `${window.location.origin}/og-image.svg`
-  }
-  return '/og-image.svg'
+  return getPublicAssetUrl('/og-image.svg').value
 })
 
+// Compute OG URL (must be absolute)
 const ogUrl = computed(() => {
-  if (!process.client) return ''
   if (videoId.value) {
-    return `${window.location.origin}/?video=${videoId.value}`
+    return `${siteOrigin.value}/?video=${videoId.value}`
   }
-  return window.location.origin
+  return siteOrigin.value
 })
 
+// Set dynamic meta tags for video sharing
 useHead({
   title: computed(() => sharedVideo.value?.title 
     ? `${sharedVideo.value.title} - Short5 Platform`
@@ -160,6 +206,10 @@ useHead({
       content: computed(() => sharedVideo.value?.description 
         ? sharedVideo.value.description
         : 'Short5 Platform - Short Video Swiper like Tinder experience'),
+    },
+    {
+      property: 'og:type',
+      content: computed(() => sharedVideo.value ? 'video.other' : 'website'),
     },
     {
       property: 'og:title',
@@ -178,8 +228,26 @@ useHead({
       content: ogImage,
     },
     {
+      property: 'og:image:width',
+      content: '1200',
+    },
+    {
+      property: 'og:image:height',
+      content: '630',
+    },
+    {
+      property: 'og:image:alt',
+      content: computed(() => sharedVideo.value?.title 
+        ? sharedVideo.value.title
+        : 'Short5 Platform'),
+    },
+    {
       property: 'og:url',
       content: ogUrl,
+    },
+    {
+      name: 'twitter:card',
+      content: 'summary_large_image',
     },
     {
       name: 'twitter:title',
@@ -197,6 +265,23 @@ useHead({
       name: 'twitter:image',
       content: ogImage,
     },
+    {
+      name: 'twitter:image:alt',
+      content: computed(() => sharedVideo.value?.title 
+        ? sharedVideo.value.title
+        : 'Short5 Platform'),
+    },
+  ],
+  link: [
+    {
+      rel: 'icon',
+      type: 'image/svg+xml',
+      href: getPublicAssetUrl('/icon.svg'),
+    },
+    {
+      rel: 'apple-touch-icon',
+      href: getPublicAssetUrl('/icon.svg'),
+    },
   ],
 })
 
@@ -205,17 +290,6 @@ onMounted(async () => {
     authStore.initFromStorage()
     // Set mounted flag after auth is initialized to trigger reactive update
     isMounted.value = true
-    
-    // Load video if shared via query parameter
-    if (videoId.value) {
-      try {
-        const video = await videosStore.getVideoStatus(videoId.value)
-        sharedVideo.value = video
-      } catch (error) {
-        // Video not found or error - will show default feed
-        console.warn('Failed to load shared video:', error)
-      }
-    }
   }
 })
 </script>
