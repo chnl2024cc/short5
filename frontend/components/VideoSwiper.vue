@@ -128,6 +128,17 @@
           </svg>
           <span class="font-medium">{{ t('videoSwiper.shareButton') }}</span>
         </button>
+        <button
+          v-if="authStore.isAuthenticated"
+          @click.stop="showReportDialog = true"
+          class="flex items-center gap-1 px-3 py-1.5 bg-red-600/60 hover:bg-red-600/80 active:bg-red-600/90 rounded-lg transition-colors touch-manipulation"
+          title="Report"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span class="font-medium">Report</span>
+        </button>
       </div>
       <!-- Share notification -->
       <div
@@ -167,15 +178,60 @@
         <div class="share-button-glow"></div>
       </button>
     </Transition>
+
+    <!-- Report Dialog -->
+    <div
+      v-if="showReportDialog"
+      class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+      @click.self="showReportDialog = false"
+    >
+      <div class="bg-gray-900 rounded-lg p-6 max-w-md w-full">
+        <h3 class="text-xl font-bold mb-4">Report Video</h3>
+        <p class="text-gray-400 mb-4">
+          Help us keep the community safe. Why are you reporting this video?
+        </p>
+        <div class="mb-4">
+          <label class="block text-sm font-semibold mb-2">
+            Reason (optional)
+          </label>
+          <textarea
+            v-model="reportReason"
+            class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500"
+            rows="3"
+            placeholder="Please describe the issue..."
+          />
+        </div>
+        <div v-if="reportSuccess" class="mb-4 p-3 bg-green-900/50 border border-green-700 rounded-lg">
+          <p class="text-green-300 text-sm">Report submitted successfully. Thank you!</p>
+        </div>
+        <div class="flex gap-3">
+          <button
+            @click="showReportDialog = false; reportReason = ''; reportSuccess = false"
+            class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            @click="submitReport"
+            :disabled="reportSubmitting || reportSuccess"
+            class="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+          >
+            {{ reportSubmitting ? 'Submitting...' : reportSuccess ? 'Submitted' : 'Submit Report' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useVideosStore } from '~/stores/videos'
+import { useAuthStore } from '~/stores/auth'
 import { useActionHint } from '~/composables/useActionHint'
 import { useI18n } from '~/composables/useI18n'
 import { useShareVideo } from '~/composables/useShareVideo'
+import { useApi } from '~/composables/useApi'
 import ActionHintOverlay from './ActionHintOverlay.vue'
 import type { Video } from '~/types/video'
 
@@ -218,6 +274,8 @@ const emit = defineEmits<{
 }>()
 
 const videosStore = useVideosStore()
+const authStore = useAuthStore()
+const api = useApi()
 const swipeContainer = ref<HTMLElement | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
 const { t } = useI18n()
@@ -231,6 +289,12 @@ const shareButtonDismissed = ref(false)
 
 // Share notification state
 const showShareNotification = ref(false)
+
+// Report dialog state
+const showReportDialog = ref(false)
+const reportReason = ref('')
+const reportSubmitting = ref(false)
+const reportSuccess = ref(false)
 
 // Share video functionality with notification UI
 const { shareVideo } = useShareVideo({
@@ -261,6 +325,31 @@ const handleShare = async () => {
 // Handle prominent share button click
 const handleShareButtonClick = async () => {
   await handleShare()
+}
+
+// Report functionality
+const submitReport = async () => {
+  if (reportSubmitting.value || reportSuccess.value) return
+  
+  reportSubmitting.value = true
+  try {
+    await api.post('/reports', {
+      report_type: 'video',
+      target_id: props.video.id,
+      reason: reportReason.value || undefined,
+    })
+    reportSuccess.value = true
+    setTimeout(() => {
+      showReportDialog.value = false
+      reportReason.value = ''
+      reportSuccess.value = false
+    }, 2000)
+  } catch (err: any) {
+    console.error('Failed to submit report:', err)
+    alert(err.message || 'Failed to submit report. Please try again.')
+  } finally {
+    reportSubmitting.value = false
+  }
 }
 
 // Expose play method for external control (needed for iOS Safari autoplay)

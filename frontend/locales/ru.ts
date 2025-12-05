@@ -208,6 +208,8 @@ export const translations = {
     tabs: {
       overview: 'Обзор',
       pendingVideos: 'Ожидающие видео',
+      allVideos: 'Все видео',
+      users: 'Пользователи',
       reports: 'Жалобы',
     },
     loading: 'Загрузка...',

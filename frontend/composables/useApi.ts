@@ -200,6 +200,11 @@ export const useApi = () => {
         method: 'PUT',
         body: data ? JSON.stringify(data) : undefined,
       }),
+    patch: <T>(endpoint: string, data?: any) =>
+      request<T>(endpoint, {
+        method: 'PATCH',
+        body: data ? JSON.stringify(data) : undefined,
+      }),
     delete: <T>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' }),
   }
 }

@@ -59,13 +59,13 @@
       <!-- Admin Dashboard -->
       <div v-else>
         <!-- Tabs -->
-        <div class="flex gap-2 mb-6 border-b border-gray-800">
+        <div class="flex gap-2 mb-6 border-b border-gray-800 overflow-x-auto">
           <button
             v-for="tab in tabs"
             :key="tab.id"
             @click="activeTab = tab.id"
             :class="[
-              'px-4 py-2 font-semibold transition-colors border-b-2',
+              'px-4 py-2 font-semibold transition-colors border-b-2 whitespace-nowrap flex-shrink-0',
               activeTab === tab.id
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-gray-400 hover:text-white',
@@ -83,8 +83,22 @@
           <div class="text-gray-400 text-lg">{{ t('admin.loading') }}</div>
         </div>
 
+        <!-- Error State -->
+        <div
+          v-if="error"
+          class="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6"
+        >
+          <p class="text-red-300">{{ error }}</p>
+          <button
+            @click="loadStats()"
+            class="mt-2 text-blue-400 hover:text-blue-300 text-sm"
+          >
+            Retry
+          </button>
+        </div>
+
         <!-- Stats Tab -->
-        <div v-else-if="activeTab === 'stats'" class="space-y-6">
+        <div v-if="activeTab === 'stats' && !loading" class="space-y-6">
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             <div class="bg-gray-900 rounded-lg p-6">
               <div class="text-sm text-gray-400 mb-2">{{ t('admin.stats.totalUsers') }}</div>
@@ -112,15 +126,240 @@
           <!-- Videos by Status -->
           <div class="bg-gray-900 rounded-lg p-6">
             <h3 class="text-xl font-bold mb-4">{{ t('admin.stats.videosByStatus') }}</h3>
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div v-if="stats?.videos?.by_status" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               <div
-                v-for="(count, status) in stats?.videos?.by_status"
+                v-for="(count, status) in stats.videos.by_status"
                 :key="status"
                 class="text-center"
               >
                 <div class="text-2xl font-bold mb-1">{{ count }}</div>
                 <div class="text-sm text-gray-400 capitalize">{{ status }}</div>
               </div>
+            </div>
+            <div v-else class="text-gray-400 text-center py-4">
+              No status data available
+            </div>
+          </div>
+
+          <!-- Debug Info (remove in production) -->
+          <details class="bg-gray-900 rounded-lg p-4 mt-6">
+            <summary class="cursor-pointer text-sm text-gray-400">Debug: Raw Stats Data</summary>
+            <pre class="mt-2 text-xs text-gray-500 overflow-auto">{{ JSON.stringify(stats, null, 2) }}</pre>
+          </details>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div v-else-if="activeTab === 'analytics'" class="space-y-6">
+          <div class="flex items-center justify-between flex-wrap gap-4">
+            <h2 class="text-xl font-bold">Analytics</h2>
+            <div class="flex items-center gap-4">
+              <select
+                v-model="analyticsPeriod"
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="day">Daily</option>
+                <option value="week">Weekly</option>
+              </select>
+              <select
+                v-model="analyticsDays"
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option :value="7">Last 7 days</option>
+                <option :value="14">Last 14 days</option>
+                <option :value="30">Last 30 days</option>
+                <option :value="60">Last 60 days</option>
+                <option :value="90">Last 90 days</option>
+              </select>
+              <button
+                @click="loadAnalytics"
+                :disabled="analyticsLoading"
+                class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                {{ analyticsLoading ? 'Loading...' : 'Refresh' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="analyticsLoading && !analyticsData" class="text-center py-8 text-gray-400">
+            Loading analytics...
+          </div>
+
+          <!-- Summary Cards -->
+          <div v-if="analyticsData" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Total Views</div>
+              <div class="text-2xl font-bold">{{ analyticsData.totals?.views?.toLocaleString() || 0 }}</div>
+              <div class="text-xs text-gray-500 mt-1">Avg: {{ analyticsData.averages?.views_per_period || 0 }}/{{ analyticsPeriod }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Total Likes</div>
+              <div class="text-2xl font-bold">{{ analyticsData.totals?.likes?.toLocaleString() || 0 }}</div>
+              <div class="text-xs text-gray-500 mt-1">Avg: {{ analyticsData.averages?.likes_per_period || 0 }}/{{ analyticsPeriod }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">New Videos</div>
+              <div class="text-2xl font-bold">{{ analyticsData.totals?.new_videos?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">New Users</div>
+              <div class="text-2xl font-bold">{{ analyticsData.totals?.new_users?.toLocaleString() || 0 }}</div>
+            </div>
+          </div>
+
+          <!-- Analytics Table -->
+          <div v-if="analyticsData && analytics.length > 0" class="bg-gray-900 rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-gray-800">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Views</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Likes</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Videos</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Users</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                  <tr v-for="item in analytics" :key="item.date" class="hover:bg-gray-800">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      {{ formatAnalyticsDate(item.date) }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-300">
+                      {{ item.views?.toLocaleString() || 0 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-300">
+                      {{ item.likes?.toLocaleString() || 0 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-300">
+                      {{ item.videos?.toLocaleString() || 0 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-300">
+                      {{ item.users?.toLocaleString() || 0 }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div v-else-if="!analyticsLoading && analyticsData && analytics.length === 0" class="bg-gray-900 rounded-lg p-12 text-center">
+            <div class="text-6xl mb-4">📊</div>
+            <h4 class="text-xl font-bold mb-2">No Data</h4>
+            <p class="text-gray-400">No analytics data available for the selected period.</p>
+          </div>
+
+          <!-- Additional Details -->
+          <div v-if="analyticsData && analytics.length > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <!-- Engagement Metrics -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Engagement Metrics</h3>
+              <div class="space-y-4">
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm text-gray-400">Engagement Rate</span>
+                    <span class="text-lg font-bold">{{ analyticsData.engagement_rate || 0 }}%</span>
+                  </div>
+                  <div class="text-xs text-gray-500">Likes per 100 views</div>
+                </div>
+                <div v-if="analyticsData.growth">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm text-gray-400">Views Growth</span>
+                    <span :class="['text-lg font-bold', analyticsData.growth.views_growth >= 0 ? 'text-green-400' : 'text-red-400']">
+                      {{ analyticsData.growth.views_growth >= 0 ? '+' : '' }}{{ analyticsData.growth.views_growth || 0 }}%
+                    </span>
+                  </div>
+                  <div class="text-xs text-gray-500">Second half vs first half</div>
+                </div>
+                <div v-if="analyticsData.growth">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm text-gray-400">Likes Growth</span>
+                    <span :class="['text-lg font-bold', analyticsData.growth.likes_growth >= 0 ? 'text-green-400' : 'text-red-400']">
+                      {{ analyticsData.growth.likes_growth >= 0 ? '+' : '' }}{{ analyticsData.growth.likes_growth || 0 }}%
+                    </span>
+                  </div>
+                  <div class="text-xs text-gray-500">Second half vs first half</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Most Active Users -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Most Active Users</h3>
+              <div v-if="analyticsData.most_active_users && analyticsData.most_active_users.length > 0" class="space-y-2">
+                <div
+                  v-for="(user, index) in analyticsData.most_active_users"
+                  :key="user.id"
+                  class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+                >
+                  <div class="flex items-center gap-3">
+                    <span class="text-gray-500 text-sm w-6">#{{ index + 1 }}</span>
+                    <span class="text-white">{{ user.username }}</span>
+                  </div>
+                  <span class="text-gray-400 text-sm">{{ user.videos_uploaded }} videos</span>
+                </div>
+              </div>
+              <div v-else class="text-gray-400 text-center py-4 text-sm">No active users in this period</div>
+            </div>
+          </div>
+
+          <!-- Top Videos -->
+          <div v-if="analyticsData && (analyticsData.top_videos_by_views?.length > 0 || analyticsData.top_videos_by_likes?.length > 0)" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <!-- Top Videos by Views -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Top Videos by Views</h3>
+              <div v-if="analyticsData.top_videos_by_views && analyticsData.top_videos_by_views.length > 0" class="space-y-3">
+                <div
+                  v-for="(video, index) in analyticsData.top_videos_by_views"
+                  :key="video.id"
+                  class="p-3 bg-gray-800 rounded hover:bg-gray-700 transition-colors"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-gray-500 text-xs font-bold">#{{ index + 1 }}</span>
+                        <span class="text-white text-sm font-medium truncate">{{ video.title || 'Untitled' }}</span>
+                      </div>
+                      <div class="text-xs text-gray-400">by @{{ video.user?.username || 'Unknown' }}</div>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                      <div class="text-sm font-bold text-blue-400">{{ video.views?.toLocaleString() || 0 }}</div>
+                      <div class="text-xs text-gray-500">views</div>
+                      <div class="text-xs text-gray-500 mt-1">{{ video.likes || 0 }} likes</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-gray-400 text-center py-4 text-sm">No videos in this period</div>
+            </div>
+
+            <!-- Top Videos by Likes -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Top Videos by Likes</h3>
+              <div v-if="analyticsData.top_videos_by_likes && analyticsData.top_videos_by_likes.length > 0" class="space-y-3">
+                <div
+                  v-for="(video, index) in analyticsData.top_videos_by_likes"
+                  :key="video.id"
+                  class="p-3 bg-gray-800 rounded hover:bg-gray-700 transition-colors"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-gray-500 text-xs font-bold">#{{ index + 1 }}</span>
+                        <span class="text-white text-sm font-medium truncate">{{ video.title || 'Untitled' }}</span>
+                      </div>
+                      <div class="text-xs text-gray-400">by @{{ video.user?.username || 'Unknown' }}</div>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                      <div class="text-sm font-bold text-pink-400">{{ video.likes?.toLocaleString() || 0 }}</div>
+                      <div class="text-xs text-gray-500">likes</div>
+                      <div class="text-xs text-gray-500 mt-1">{{ video.views || 0 }} views</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-gray-400 text-center py-4 text-sm">No videos in this period</div>
             </div>
           </div>
         </div>
@@ -241,6 +480,278 @@
           </div>
         </div>
 
+        <!-- All Videos Tab -->
+        <div v-else-if="activeTab === 'allVideos'" class="space-y-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold">All Videos</h2>
+            <div class="flex gap-2">
+              <select
+                v-model="allVideosStatusFilter"
+                @change="() => loadAllVideos()"
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700"
+              >
+                <option value="">All Status</option>
+                <option value="uploading">Uploading</option>
+                <option value="processing">Processing</option>
+                <option value="ready">Ready</option>
+                <option value="failed">Failed</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              <button
+                @click="() => loadAllVideos()"
+                class="text-blue-400 hover:text-blue-300 text-sm"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading Videos -->
+          <div
+            v-if="allVideosLoading && allVideos.length === 0"
+            class="text-center py-8 text-gray-400"
+          >
+            Loading videos...
+          </div>
+
+          <!-- Empty State -->
+          <div
+            v-else-if="allVideos.length === 0"
+            class="bg-gray-900 rounded-lg p-12 text-center"
+          >
+            <div class="text-6xl mb-4">📹</div>
+            <h4 class="text-xl font-bold mb-2">No Videos Found</h4>
+            <p class="text-gray-400">No videos match the current filter.</p>
+          </div>
+
+          <!-- Videos List -->
+          <div v-else class="space-y-4">
+            <div
+              v-for="video in allVideos"
+              :key="video.id"
+              class="bg-gray-900 rounded-lg p-6"
+            >
+              <div class="flex flex-col sm:flex-row gap-6">
+                <!-- Thumbnail -->
+                <div class="relative w-full sm:w-48 h-64 sm:h-32 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
+                  <img
+                    v-if="video.thumbnail"
+                    :src="getAbsoluteUrl(video.thumbnail)"
+                    :alt="video.title || 'Video thumbnail'"
+                    class="w-full h-full object-cover"
+                  />
+                  <div
+                    :class="[
+                      'absolute top-2 left-2 text-white text-xs px-2 py-1 rounded',
+                      video.status === 'ready' ? 'bg-green-600' :
+                      video.status === 'processing' || video.status === 'uploading' ? 'bg-yellow-600' :
+                      video.status === 'failed' ? 'bg-red-600' : 'bg-gray-600'
+                    ]"
+                  >
+                    {{ video.status }}
+                  </div>
+                </div>
+
+                <!-- Video Info -->
+                <div class="flex-1">
+                  <h3 class="text-lg font-bold mb-2">
+                    {{ video.title || 'Untitled' }}
+                  </h3>
+                  <p
+                    v-if="video.description"
+                    class="text-sm text-gray-400 mb-4 line-clamp-2"
+                  >
+                    {{ video.description }}
+                  </p>
+                  <div class="flex flex-wrap gap-4 text-sm text-gray-500 mb-4">
+                    <span>By: {{ video.user?.username }}</span>
+                    <span>•</span>
+                    <span>{{ formatDate(video.created_at) }}</span>
+                    <span>•</span>
+                    <span>Likes: {{ video.stats?.likes || 0 }}</span>
+                    <span>•</span>
+                    <span>Views: {{ video.stats?.views || 0 }}</span>
+                  </div>
+                  
+                  <!-- Actions -->
+                  <div class="flex gap-3 flex-wrap">
+                    <a
+                      :href="`/?video=${video.id}`"
+                      target="_blank"
+                      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm"
+                    >
+                      View in Feed
+                    </a>
+                    <a
+                      v-if="video.url_mp4"
+                      :href="getAbsoluteUrl(video.url_mp4)"
+                      target="_blank"
+                      class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm"
+                    >
+                      Preview
+                    </a>
+                    <button
+                      v-if="video.status === 'ready'"
+                      @click="approveVideo(video.id)"
+                      :disabled="processingVideo === video.id"
+                      class="bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      v-if="video.status !== 'rejected'"
+                      @click="showRejectDialog(video)"
+                      :disabled="processingVideo === video.id"
+                      class="bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      @click="deleteVideoAdmin(video.id)"
+                      :disabled="deletingVideo === video.id"
+                      class="bg-red-800 hover:bg-red-900 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm"
+                    >
+                      {{ deletingVideo === video.id ? 'Deleting...' : 'Delete' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Load More -->
+            <div
+              v-if="hasMoreAllVideos && !allVideosLoading"
+              class="flex justify-center"
+            >
+              <button
+                @click="loadMoreAllVideos"
+                class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+              >
+                Load More
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div v-else-if="activeTab === 'users'" class="space-y-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold">Users</h2>
+            <div class="flex gap-2">
+              <input
+                v-model="usersSearch"
+                @keyup.enter="searchUsers"
+                type="text"
+                placeholder="Search by username or email..."
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700"
+              />
+              <button
+                @click="searchUsers"
+                class="text-blue-400 hover:text-blue-300 text-sm px-4 py-2"
+              >
+                Search
+              </button>
+              <button
+                @click="() => loadUsers()"
+                class="text-blue-400 hover:text-blue-300 text-sm"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading Users -->
+          <div
+            v-if="usersLoading && users.length === 0"
+            class="text-center py-8 text-gray-400"
+          >
+            Loading users...
+          </div>
+
+          <!-- Empty State -->
+          <div
+            v-else-if="users.length === 0"
+            class="bg-gray-900 rounded-lg p-12 text-center"
+          >
+            <div class="text-6xl mb-4">👥</div>
+            <h4 class="text-xl font-bold mb-2">No Users Found</h4>
+            <p class="text-gray-400">No users match the current search.</p>
+          </div>
+
+          <!-- Users List -->
+          <div v-else class="space-y-4">
+            <div
+              v-for="user in users"
+              :key="user.id"
+              class="bg-gray-900 rounded-lg p-6"
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3 mb-2">
+                    <h3 class="text-lg font-bold">{{ user.username }}</h3>
+                    <span
+                      v-if="user.is_admin"
+                      class="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold"
+                    >
+                      ADMIN
+                    </span>
+                    <span
+                      v-if="!user.is_active"
+                      class="px-2 py-1 bg-red-600 text-white rounded text-xs font-semibold"
+                    >
+                      BANNED
+                    </span>
+                  </div>
+                  <p class="text-sm text-gray-400 mb-2">{{ user.email }}</p>
+                  <div class="flex gap-4 text-sm text-gray-500">
+                    <span>Videos: {{ user.video_count || 0 }}</span>
+                    <span>•</span>
+                    <span>Joined: {{ formatDate(user.created_at) }}</span>
+                  </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex flex-col gap-2 ml-4">
+                  <button
+                    @click="toggleUserActive(user.id, user.is_active)"
+                    :disabled="updatingUser === user.id"
+                    :class="[
+                      'px-4 py-2 rounded-lg font-semibold transition-colors text-sm whitespace-nowrap',
+                      user.is_active
+                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                        : 'bg-green-600 hover:bg-green-700 text-white',
+                      updatingUser === user.id && 'disabled:bg-gray-700 disabled:cursor-not-allowed'
+                    ]"
+                  >
+                    {{ updatingUser === user.id ? 'Updating...' : (user.is_active ? 'Ban' : 'Unban') }}
+                  </button>
+                  <button
+                    v-if="!user.is_admin"
+                    @click="toggleUserAdmin(user.id, user.is_admin)"
+                    :disabled="updatingUser === user.id"
+                    class="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-colors text-sm whitespace-nowrap"
+                  >
+                    Make Admin
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Load More -->
+            <div
+              v-if="hasMoreUsers && !usersLoading"
+              class="flex justify-center"
+            >
+              <button
+                @click="loadMoreUsers"
+                class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+              >
+                Load More
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Reports Tab -->
         <div v-else-if="activeTab === 'reports'" class="space-y-6">
           <div class="flex items-center justify-between">
@@ -325,14 +836,34 @@
                     v-if="report.target"
                     class="bg-gray-800 rounded-lg p-4 mb-4"
                   >
-                    <div class="text-sm font-semibold mb-2">
-                      {{ report.type === 'video' ? t('admin.reports.video') : t('admin.reports.user') }}:
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="text-sm font-semibold">
+                        {{ report.type === 'video' ? t('admin.reports.video') : t('admin.reports.user') }}:
+                      </div>
+                      <div class="flex gap-2">
+                        <NuxtLink
+                          v-if="report.type === 'video'"
+                          :to="`/?video=${report.target.id}`"
+                          target="_blank"
+                          class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold transition-colors"
+                        >
+                          View Video
+                        </NuxtLink>
+                        <NuxtLink
+                          v-else
+                          :to="`/users/${report.target.id}`"
+                          target="_blank"
+                          class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold transition-colors"
+                        >
+                          View User
+                        </NuxtLink>
+                      </div>
                     </div>
                     <div
                       v-if="report.type === 'video'"
                       class="text-sm text-gray-300"
                     >
-                      <div class="font-semibold">{{ report.target.title || t('profile.untitled') }}</div>
+                      <div class="font-semibold mb-1">{{ report.target.title || t('profile.untitled') }}</div>
                       <div class="text-gray-400">
                         {{ t('admin.pendingVideos.by') }}: {{ report.target.user?.username }}
                       </div>
@@ -482,12 +1013,16 @@ const isAdmin = computed(() => {
 })
 
 const tabs = [
-  { id: 'stats', label: t('admin.tabs.overview') },
-  { id: 'videos', label: t('admin.tabs.pendingVideos') },
-  { id: 'reports', label: t('admin.tabs.reports') },
+  { id: 'stats', label: t('admin.tabs.overview') || 'Overview' },
+  { id: 'analytics', label: 'Analytics' },
+  { id: 'videos', label: t('admin.tabs.pendingVideos') || 'Pending Videos' },
+  { id: 'allVideos', label: t('admin.tabs.allVideos') || 'All Videos' },
+  { id: 'users', label: t('admin.tabs.users') || 'Users' },
+  { id: 'reports', label: t('admin.tabs.reports') || 'Reports' },
 ]
 const activeTab = ref('stats')
 const loading = ref(false)
+const error = ref<string | null>(null)
 
 // Stats
 const stats = ref<any | null>(null)
@@ -498,6 +1033,30 @@ const videosLoading = ref(false)
 const nextVideoCursor = ref<string | null>(null)
 const hasMoreVideos = ref(true)
 const processingVideo = ref<string | null>(null)
+
+// All Videos
+const allVideos = ref<any[]>([])
+const allVideosLoading = ref(false)
+const allVideosStatusFilter = ref('')
+const nextAllVideoCursor = ref<string | null>(null)
+const hasMoreAllVideos = ref(true)
+const deletingVideo = ref<string | null>(null)
+
+// Users
+const users = ref<any[]>([])
+const usersLoading = ref(false)
+const usersSearch = ref('')
+const nextUserCursor = ref<string | null>(null)
+const hasMoreUsers = ref(true)
+const updatingUser = ref<string | null>(null)
+const selectedUser = ref<any | null>(null)
+
+// Analytics
+const analytics = ref<any[]>([])
+const analyticsLoading = ref(false)
+const analyticsPeriod = ref<'day' | 'week'>('day')
+const analyticsDays = ref(30)
+const analyticsData = ref<any | null>(null)
 
 // Reports
 const reports = ref<any[]>([])
@@ -523,14 +1082,94 @@ const formatDate = (dateString: string): string => {
   })
 }
 
+const formatAnalyticsDate = (dateString: string): string => {
+  const date = new Date(dateString)
+  if (analyticsPeriod.value === 'week') {
+    // For weeks, show the start of the week
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }) + ' (Week)'
+  }
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 const loadStats = async () => {
   loading.value = true
+  error.value = null
   try {
     stats.value = await api.get('/admin/stats')
-  } catch (err) {
+    console.log('Stats loaded:', stats.value)
+  } catch (err: any) {
     console.error('Failed to load stats:', err)
+    error.value = err.message || 'Failed to load statistics'
   } finally {
     loading.value = false
+  }
+}
+
+const loadAnalytics = async () => {
+  analyticsLoading.value = true
+  try {
+    const response = await api.get<{
+      period: string
+      days: number
+      analytics: Array<{
+        date: string
+        views: number
+        likes: number
+        videos: number
+        users: number
+      }>
+      totals: {
+        views: number
+        likes: number
+        new_videos: number
+        new_users: number
+      }
+      averages: {
+        views_per_period: number
+        likes_per_period: number
+      }
+      top_videos_by_views?: Array<{
+        id: string
+        title: string
+        user: { id: string; username: string }
+        views: number
+        likes: number
+        created_at: string | null
+      }>
+      top_videos_by_likes?: Array<{
+        id: string
+        title: string
+        user: { id: string; username: string }
+        views: number
+        likes: number
+        created_at: string | null
+      }>
+      most_active_users?: Array<{
+        id: string
+        username: string
+        videos_uploaded: number
+      }>
+      engagement_rate?: number
+      growth?: {
+        views_growth: number
+        likes_growth: number
+      }
+    }>(`/admin/analytics?period=${analyticsPeriod.value}&days=${analyticsDays.value}`)
+    analyticsData.value = response
+    analytics.value = response.analytics || []
+  } catch (err: any) {
+    console.error('Failed to load analytics:', err)
+    error.value = err.message || 'Failed to load analytics'
+  } finally {
+    analyticsLoading.value = false
   }
 }
 
@@ -671,6 +1310,155 @@ const resolveReport = async (reportId: string, action: 'resolve' | 'dismiss') =>
   }
 }
 
+// All Videos Functions
+const loadAllVideos = async (cursor?: string) => {
+  if (allVideosLoading.value || (!hasMoreAllVideos.value && cursor)) return
+  
+  allVideosLoading.value = true
+  try {
+    const params = new URLSearchParams()
+    if (allVideosStatusFilter.value) {
+      params.append('status', allVideosStatusFilter.value)
+    }
+    if (cursor) {
+      params.append('cursor', cursor)
+    }
+    
+    const response = await api.get<{
+      videos: any[]
+      next_cursor: string | null
+      has_more: boolean
+    }>(`/admin/videos${params.toString() ? `?${params.toString()}` : ''}`)
+    
+    if (cursor) {
+      allVideos.value.push(...response.videos)
+    } else {
+      allVideos.value = response.videos
+    }
+    
+    nextAllVideoCursor.value = response.next_cursor
+    hasMoreAllVideos.value = response.has_more
+  } catch (err) {
+    console.error('Failed to load all videos:', err)
+  } finally {
+    allVideosLoading.value = false
+  }
+}
+
+const loadMoreAllVideos = () => {
+  if (hasMoreAllVideos.value && nextAllVideoCursor.value) {
+    loadAllVideos(nextAllVideoCursor.value)
+  }
+}
+
+const deleteVideoAdmin = async (videoId: string) => {
+  if (!confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
+    return
+  }
+  
+  deletingVideo.value = videoId
+  try {
+    await api.delete(`/admin/videos/${videoId}`)
+    // Remove from list
+    allVideos.value = allVideos.value.filter(v => v.id !== videoId)
+    // Reload stats
+    loadStats()
+  } catch (err) {
+    console.error('Failed to delete video:', err)
+    alert(t('errors.generic'))
+  } finally {
+    deletingVideo.value = null
+  }
+}
+
+// Users Functions
+const loadUsers = async (cursor?: string) => {
+  if (usersLoading.value || (!hasMoreUsers.value && cursor)) return
+  
+  usersLoading.value = true
+  try {
+    const params = new URLSearchParams()
+    if (usersSearch.value) {
+      params.append('search', usersSearch.value)
+    }
+    if (cursor) {
+      params.append('cursor', cursor)
+    }
+    
+    const response = await api.get<{
+      users: any[]
+      next_cursor: string | null
+      has_more: boolean
+    }>(`/admin/users${params.toString() ? `?${params.toString()}` : ''}`)
+    
+    if (cursor) {
+      users.value.push(...response.users)
+    } else {
+      users.value = response.users
+    }
+    
+    nextUserCursor.value = response.next_cursor
+    hasMoreUsers.value = response.has_more
+  } catch (err) {
+    console.error('Failed to load users:', err)
+  } finally {
+    usersLoading.value = false
+  }
+}
+
+const loadMoreUsers = () => {
+  if (hasMoreUsers.value && nextUserCursor.value) {
+    loadUsers(nextUserCursor.value)
+  }
+}
+
+const searchUsers = () => {
+  users.value = []
+  nextUserCursor.value = null
+  hasMoreUsers.value = true
+  loadUsers()
+}
+
+const toggleUserActive = async (userId: string, currentStatus: boolean) => {
+  updatingUser.value = userId
+  try {
+    await api.patch(`/admin/users/${userId}`, { is_active: !currentStatus })
+    // Update user in list
+    const user = users.value.find(u => u.id === userId)
+    if (user) {
+      user.is_active = !currentStatus
+    }
+    // Reload stats
+    loadStats()
+  } catch (err) {
+    console.error('Failed to update user:', err)
+    alert(t('errors.generic'))
+  } finally {
+    updatingUser.value = null
+  }
+}
+
+const toggleUserAdmin = async (userId: string, currentStatus: boolean) => {
+  if (!confirm(`Are you sure you want to ${currentStatus ? 'remove' : 'grant'} admin privileges?`)) {
+    return
+  }
+  
+  updatingUser.value = userId
+  try {
+    await api.patch(`/admin/users/${userId}`, { is_admin: !currentStatus })
+    // Update user in list
+    const user = users.value.find(u => u.id === userId)
+    if (user) {
+      user.is_admin = !currentStatus
+    }
+  } catch (err) {
+    console.error('Failed to update user:', err)
+    alert(t('errors.generic'))
+  } finally {
+    updatingUser.value = null
+  }
+}
+
 const handleLogout = async () => {
   try {
     await authStore.logout()
@@ -684,10 +1472,22 @@ const handleLogout = async () => {
 watch(activeTab, (newTab) => {
   if (newTab === 'stats') {
     loadStats()
+  } else if (newTab === 'analytics') {
+    loadAnalytics()
   } else if (newTab === 'videos') {
     loadPendingVideos()
+  } else if (newTab === 'allVideos') {
+    loadAllVideos()
+  } else if (newTab === 'users') {
+    loadUsers()
   } else if (newTab === 'reports') {
     loadReports()
+  }
+})
+
+watch([analyticsPeriod, analyticsDays], () => {
+  if (activeTab.value === 'analytics') {
+    loadAnalytics()
   }
 })
 
@@ -708,10 +1508,8 @@ onMounted(() => {
     return
   }
   
-  // Load stats if admin
-  if (isAdmin.value) {
-    loadStats()
-  }
+  // Load stats - user is admin, so load data
+  loadStats()
 })
 </script>
 
