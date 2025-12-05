@@ -2,6 +2,9 @@
   <div
     ref="swipeContainer"
     class="video-container"
+    @touchstart="onTouchStart"
+    @touchmove="onTouchMove"
+    @touchend="onTouchEnd"
     @mousedown="onMouseDown"
     @mousemove="onMouseMove"
     @mouseup="onMouseEnd"
@@ -141,6 +144,29 @@
       :show="showActionHint"
       @dismiss="dismissActionHint"
     />
+
+    <!-- Prominent Share Button - Appears after second playback -->
+    <Transition name="share-button">
+      <button
+        v-if="showShareButton"
+        @click.stop="handleShareButtonClick"
+        class="prominent-share-button"
+        :aria-label="t('videoSwiper.shareVideo')"
+      >
+        <div class="share-button-content">
+          <div class="share-button-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+          </div>
+          <div class="share-button-text">
+            <span class="share-button-label">{{ t('videoSwiper.shareWithFriends') }}</span>
+            <span class="share-button-subtitle">{{ t('videoSwiper.theyWillLoveIt') }}</span>
+          </div>
+        </div>
+        <div class="share-button-glow"></div>
+      </button>
+    </Transition>
   </div>
 </template>
 
@@ -199,6 +225,10 @@ const { t } = useI18n()
 // Action hint management
 const { showActionHint, dismissActionHint, showHint: showActionHintHint } = useActionHint()
 
+// Prominent share button state - appears after second playback
+const showShareButton = ref(false)
+const shareButtonDismissed = ref(false)
+
 // Share notification state
 const showShareNotification = ref(false)
 
@@ -214,7 +244,23 @@ const { shareVideo } = useShareVideo({
 })
 
 const handleShare = async () => {
+  // Simply call share - video should continue playing naturally
+  // The share dialog (if it opens) might pause the video, but that's expected browser behavior
+  // We don't need to interfere with video playback during the gesture
   await shareVideo(props.video)
+  // Note: If the share dialog pauses the video, it will resume automatically when dialog closes
+  // This matches the behavior when clicking the share button
+  
+  // Dismiss prominent share button after sharing
+  if (showShareButton.value) {
+    showShareButton.value = false
+    shareButtonDismissed.value = true
+  }
+}
+
+// Handle prominent share button click
+const handleShareButtonClick = async () => {
+  await handleShare()
 }
 
 // Expose play method for external control (needed for iOS Safari autoplay)
@@ -258,6 +304,8 @@ const currentY = ref(0)
 const isDragging = ref(false)
 const swipeDirection = ref<'like' | 'not_like' | 'share' | null>(null)
 const touchStartTime = ref(0)
+// Track if a swipe occurred to prevent click events from firing
+const hasSwiped = ref(false)
 
 // Overlay state
 const showOverlay = computed(() => isDragging.value && swipeDirection.value !== null)
@@ -283,174 +331,212 @@ const overlayOpacity = computed(() => {
   return Math.min(distance / 150, 1)
 })
 
-// Touch/Mouse handlers
-const getEventCoordinates = (e: TouchEvent | MouseEvent) => {
+// ============================================================================
+// SWIPE GESTURE DETECTION - Clean Implementation Following Vue Best Practices
+// ============================================================================
+
+/**
+ * Check if target is an interactive element (button, link, input)
+ * Prevents swipe detection from interfering with button clicks
+ */
+const isInteractiveElement = (target: HTMLElement | null): boolean => {
+  if (!target) return false
+  return (
+    target.tagName === 'BUTTON' ||
+    target.tagName === 'A' ||
+    target.tagName === 'INPUT' ||
+    !!target.closest('button') ||
+    !!target.closest('a') ||
+    !!target.closest('input')
+  )
+}
+
+/**
+ * Extract coordinates from touch or mouse event
+ * Handles iOS Safari quirks with changedTouches
+ */
+const getEventCoordinates = (e: TouchEvent | MouseEvent): { x: number; y: number } => {
   if (e instanceof TouchEvent) {
-    // Use touches[0] for active touches, or changedTouches[0] as fallback (iOS Safari quirk)
     const touch = e.touches?.[0] || e.changedTouches?.[0]
     if (touch) {
       return { x: touch.clientX, y: touch.clientY }
     }
-    // Fallback if no touches
     return { x: 0, y: 0 }
   }
-  // It's a MouseEvent
   return { x: e.clientX, y: e.clientY }
 }
 
-const onTouchStart = (e: TouchEvent) => {
+/**
+ * Start gesture tracking
+ * Only starts if not clicking on interactive elements
+ */
+const startGesture = (e: TouchEvent | MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (isInteractiveElement(target)) return
+  
   const coords = getEventCoordinates(e)
   startX.value = coords.x
   startY.value = coords.y
   isDragging.value = true
-  // Store touch start time for tap detection
+  hasSwiped.value = false // Reset swipe flag
   touchStartTime.value = Date.now()
+  swipeDirection.value = null
 }
 
-const onMouseDown = (e: MouseEvent) => {
-  const coords = getEventCoordinates(e)
-  startX.value = coords.x
-  startY.value = coords.y
-  isDragging.value = true
-  // Store mouse down time for click detection
-  touchStartTime.value = Date.now()
-}
-
-const onTouchMove = (e: TouchEvent) => {
+/**
+ * Update gesture during movement
+ * Calculates direction and prevents default scrolling for swipes
+ */
+const updateGesture = (e: TouchEvent | MouseEvent) => {
   if (!isDragging.value) return
   
   const coords = getEventCoordinates(e)
   currentX.value = coords.x
   currentY.value = coords.y
   
-  const deltaX = currentX.value - startX.value
-  const deltaY = currentY.value - startY.value
-  const absDeltaX = Math.abs(deltaX)
-  const absDeltaY = Math.abs(deltaY)
-  
-  updateSwipeDirection()
-  
-  // Prevent default scrolling behavior for swipes
-  // This is critical for iOS Safari - preventDefault() only works with { passive: false }
-  if (e.touches.length === 1) {
-    // For upward swipes, be more aggressive with preventDefault to stop page scrolling
-    if (deltaY < 0 && absDeltaY > 20) {
-      // Upward swipe detected - prevent default to stop scrolling
-      e.preventDefault()
-    } else if (absDeltaX > 10 || absDeltaY > 10) {
-      // Other swipes - prevent default if we've moved enough to be a deliberate swipe
-      e.preventDefault()
-    }
-  }
-}
-
-const onMouseMove = (e: MouseEvent) => {
-  if (!isDragging.value) return
-  const coords = getEventCoordinates(e)
-  currentX.value = coords.x
-  currentY.value = coords.y
-  updateSwipeDirection()
-}
-
-const updateSwipeDirection = () => {
   const deltaX = currentX.value - startX.value
   const deltaY = currentY.value - startY.value
   const absDeltaX = Math.abs(deltaX)
   const absDeltaY = Math.abs(deltaY)
   
   // Determine swipe direction based on dominant axis
-  if (absDeltaY > absDeltaX && absDeltaY > 50) {
-    // Vertical swipe - check if upward
-    if (deltaY < 0) {
-      swipeDirection.value = 'share'
-    } else {
-      // Downward swipe - ignore (could be scrolling)
-      swipeDirection.value = null
-    }
-  } else if (absDeltaX > absDeltaY && absDeltaX > 50) {
+  const minMovement = 30 // Minimum pixels to detect direction
+  if (absDeltaY > absDeltaX && absDeltaY > minMovement) {
+    // Vertical swipe
+    swipeDirection.value = deltaY < 0 ? 'share' : null // Up = share, Down = ignore
+  } else if (absDeltaX > absDeltaY && absDeltaX > minMovement) {
     // Horizontal swipe
     swipeDirection.value = deltaX > 0 ? 'like' : 'not_like'
-  } else {
-    swipeDirection.value = null
   }
-}
-
-const onTouchEnd = (e: TouchEvent) => {
-  // Update coordinates from touch end event (important for iOS Safari)
-  if (e.changedTouches && e.changedTouches.length > 0) {
-    const touch = e.changedTouches[0]
-    if (touch) {
-      currentX.value = touch.clientX
-      currentY.value = touch.clientY
-    }
-  }
-  handleSwipeEnd()
-}
-
-const onMouseEnd = () => {
-  handleSwipeEnd()
-}
-
-// Handle direct clicks on container (fallback for tap detection)
-const handleContainerClick = (e: MouseEvent) => {
-  // Only handle if it's a simple click (not part of a drag)
-  if (!isDragging.value) {
-    // Check if click target is the container or video (not a button or overlay)
-    const target = e.target as HTMLElement
-    if (target === swipeContainer.value || target === videoElement.value || target.closest('.video-container')) {
-      // Small delay to avoid double-triggering with touch events
-      setTimeout(() => {
-        if (!isDragging.value) {
-          togglePlayPause()
-        }
-      }, 100)
+  
+  // Prevent default scrolling for swipes (critical for iOS Safari)
+  if (e instanceof TouchEvent && e.touches.length === 1) {
+    if (absDeltaX > 10 || absDeltaY > 10) {
+      e.preventDefault()
     }
   }
 }
 
-const handleSwipeEnd = () => {
+/**
+ * End gesture and process result
+ * Handles share, like/not_like, and tap gestures
+ */
+const endGesture = (e?: TouchEvent) => {
   if (!isDragging.value) return
+  
+  // Update final coordinates from touch end event (iOS Safari)
+  if (e?.changedTouches?.[0]) {
+    const touch = e.changedTouches[0]
+    currentX.value = touch.clientX
+    currentY.value = touch.clientY
+  }
   
   const deltaX = currentX.value - startX.value
   const deltaY = currentY.value - startY.value
   const absDeltaX = Math.abs(deltaX)
   const absDeltaY = Math.abs(deltaY)
-  const threshold = 100 // Minimum swipe distance
-  const touchDuration = Date.now() - touchStartTime.value
-  const isTap = absDeltaX < 10 && absDeltaY < 10 && touchDuration < 300 // Tap if movement < 10px and duration < 300ms
+  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+  const duration = Date.now() - touchStartTime.value
   
-  // Dismiss action hint when user interacts
+  // Process gesture result BEFORE resetting state
+  const SWIPE_THRESHOLD = 100 // Minimum distance for swipe
+  const TAP_THRESHOLD = 10 // Maximum distance for tap
+  const TAP_DURATION = 300 // Maximum duration for tap (ms)
+  
+  const isTap = distance < TAP_THRESHOLD && duration < TAP_DURATION
+  const isUpwardSwipe = swipeDirection.value === 'share' && absDeltaY > absDeltaX && absDeltaY > SWIPE_THRESHOLD && deltaY < 0
+  const isHorizontalSwipe = (swipeDirection.value === 'like' || swipeDirection.value === 'not_like') && absDeltaX > absDeltaY && absDeltaX > SWIPE_THRESHOLD
+  
+  // Mark if a swipe occurred (prevents click event from firing)
+  if (isUpwardSwipe || isHorizontalSwipe) {
+    hasSwiped.value = true
+  }
+  
+  // Dismiss hints on any interaction
   if (showActionHint.value) {
     dismissActionHint()
   }
   
-  // Check for upward swipe: vertical swipe is dominant, distance exceeds threshold, and swipe is upward
-  // We check both swipeDirection.value and the actual deltaY to ensure we catch it even if direction wasn't set during move
-  const isUpwardSwipe = (swipeDirection.value === 'share' || (absDeltaY > absDeltaX && absDeltaY > threshold && deltaY < 0)) && absDeltaY > threshold
-  const isHorizontalSwipe = absDeltaX > absDeltaY && absDeltaX > threshold
-  
+  // Handle gestures
   if (isUpwardSwipe) {
-    // Upward swipe completed - trigger share
-    // IMPORTANT: Call handleShare synchronously to preserve user gesture context for iOS Safari
-    // This is critical for navigator.share() to work on iOS
+    // Upward swipe = Share (preserves user gesture context for iOS Safari)
     handleShare()
     emit('swiped', 'share')
-  } else if (isHorizontalSwipe && (swipeDirection.value === 'like' || swipeDirection.value === 'not_like')) {
-    // Horizontal swipe completed
-    emit('swiped', swipeDirection.value)
-    // Vote on video
-    videosStore.voteOnVideo(props.video.id, swipeDirection.value)
+  } else if (isHorizontalSwipe && swipeDirection.value) {
+    // Horizontal swipe = Like/Not Like
+    const swipeDir = swipeDirection.value as 'like' | 'not_like'
+    emit('swiped', swipeDir)
+    videosStore.voteOnVideo(props.video.id, swipeDir)
   } else if (isTap) {
-    // It's a tap/click - toggle play/pause
+    // Tap = Toggle play/pause (only if no swipe occurred)
     togglePlayPause()
   }
   
-  // Reset
+  // Reset state AFTER processing
   isDragging.value = false
   swipeDirection.value = null
   currentX.value = 0
   currentY.value = 0
   touchStartTime.value = 0
+  
+  // Clear swipe flag after a short delay to allow click prevention
+  // This prevents click events that fire after touch events
+  if (hasSwiped.value) {
+    setTimeout(() => {
+      hasSwiped.value = false
+    }, 300) // Click events typically fire within 300ms
+  }
+}
+
+// Event handlers - Clean and simple
+const onTouchStart = (e: TouchEvent) => startGesture(e)
+const onMouseDown = (e: MouseEvent) => startGesture(e)
+const onTouchMove = (e: TouchEvent) => updateGesture(e)
+const onMouseMove = (e: MouseEvent) => updateGesture(e)
+
+const onTouchEnd = (e: TouchEvent) => {
+  endGesture(e)
+  // CRITICAL: Prevent click event from firing after swipe
+  // This completely separates swipe gestures from click events
+  if (hasSwiped.value) {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+}
+
+const onMouseEnd = () => endGesture()
+
+// Handle container clicks for play/pause (fallback)
+// IMPORTANT: Only handles actual clicks, NOT swipes
+let clickTimeout: NodeJS.Timeout | null = null
+
+const handleContainerClick = (e: MouseEvent) => {
+  // CRITICAL: Ignore clicks that occurred after a swipe
+  // This completely separates tap/click from swipe gestures
+  if (hasSwiped.value || isDragging.value) {
+    e.preventDefault()
+    e.stopPropagation()
+    return
+  }
+  
+  const target = e.target as HTMLElement
+  if (target === swipeContainer.value || target === videoElement.value || target.closest('.video-container')) {
+    // Only process if it's a genuine mouse click (not from touch event)
+    // Check if this is a mouse click by checking pointerType if available, or if touch is not supported
+    const isMouseClick = (e instanceof PointerEvent && e.pointerType === 'mouse') || 
+                         (!('ontouchstart' in window) && e.type === 'click')
+    
+    if (isMouseClick) {
+      if (clickTimeout) clearTimeout(clickTimeout)
+      clickTimeout = setTimeout(() => {
+        // Double-check we didn't swipe during the timeout
+        if (!isDragging.value && !hasSwiped.value) {
+          togglePlayPause()
+        }
+        clickTimeout = null
+      }, 100)
+    }
+  }
 }
 
 // Initialize HLS video playback with proper error handling
@@ -465,6 +551,9 @@ const initializeVideo = async (retry = false) => {
     retryCount.value = 0
     videoLoopCount.value = 0 // Reset loop count for new video
     lastVideoTime.value = 0
+    // Reset share button state for new video
+    showShareButton.value = false
+    shareButtonDismissed.value = false
   }
   
   isLoading.value = true
@@ -492,7 +581,10 @@ const initializeVideo = async (retry = false) => {
       handleVideoError(new Error('MP4 URL is invalid or could not be resolved'))
       return
     }
-    console.log(`[VideoSwiper] Loading MP4: ${mp4Src}`)
+    // Log only in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[VideoSwiper] Loading MP4: ${mp4Src}`)
+    }
     video.src = mp4Src
     video.load()
     video.addEventListener('error', handleNativeVideoError, { once: true })
@@ -593,6 +685,9 @@ const cleanupVideo = () => {
   // Reset loop tracking
   videoLoopCount.value = 0
   lastVideoTime.value = 0
+  // Reset share button state for new video
+  showShareButton.value = false
+  shareButtonDismissed.value = false
   // Clear timeouts
   if (retryTimeout) {
     clearTimeout(retryTimeout)
@@ -602,7 +697,10 @@ const cleanupVideo = () => {
     clearTimeout(bufferingTimeout)
     bufferingTimeout = null
   }
-  
+  if (clickTimeout) {
+    clearTimeout(clickTimeout)
+    clickTimeout = null
+  }
   
   // Clean up video element
   if (videoElement.value) {
@@ -690,6 +788,16 @@ const onTimeUpdate = () => {
       // Show action hint when video has looped once (played twice)
       if (videoLoopCount.value === 1) {
         showActionHintHint(500) // Show after 500ms delay
+        
+        // Show prominent share button after second playback (when user might want to share)
+        // Delay slightly longer than action hint to avoid overwhelming user
+        if (!shareButtonDismissed.value) {
+          setTimeout(() => {
+            if (props.isActive && videoLoopCount.value >= 1) {
+              showShareButton.value = true
+            }
+          }, 2000) // Show 2 seconds after loop (1.5s after action hint)
+        }
       }
     }
     
@@ -734,21 +842,17 @@ const onVideoPlay = () => {
 
 
 onMounted(() => {
-  // Initialize video playback when component is mounted
   if (process.client) {
     nextTick(() => {
       initializeVideo()
     })
     
-    // Add touch event listeners with { passive: false } for iOS Safari compatibility
-    // This is REQUIRED for preventDefault() to work on touchmove events
+    // Add touch event listeners with proper passive options for iOS Safari
+    // touchmove MUST be non-passive to allow preventDefault() for scroll prevention
     const container = swipeContainer.value
     if (container) {
-      // touchstart can be passive (we don't call preventDefault there)
       container.addEventListener('touchstart', onTouchStart, { passive: true })
-      // touchmove MUST be non-passive for preventDefault() to work on iOS Safari
       container.addEventListener('touchmove', onTouchMove, { passive: false })
-      // touchend can be passive
       container.addEventListener('touchend', onTouchEnd, { passive: true })
     }
   }
@@ -844,5 +948,247 @@ onUnmounted(() => {
   /* Use max() to ensure minimum padding while respecting safe area insets - works better in iOS Safari */
   /* This pattern is required for iOS Safari to properly recognize env() values */
   padding-bottom: max(calc(1rem + env(safe-area-inset-bottom)), 1rem);
+}
+
+/* ============================================================================
+   PROMINENT SHARE BUTTON - Appears after second playback
+   ============================================================================ */
+
+.prominent-share-button {
+  position: absolute;
+  bottom: 6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 1.5rem;
+  padding: 1.25rem 2rem;
+  box-shadow: 
+    0 20px 60px rgba(59, 130, 246, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 0 40px rgba(59, 130, 246, 0.3);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: auto;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: shareButtonPulse 2s ease-in-out infinite, shareButtonFloat 3s ease-in-out infinite;
+  min-width: 280px;
+  max-width: 90%;
+}
+
+.prominent-share-button:hover {
+  transform: translateX(-50%) translateY(-4px) scale(1.05);
+  box-shadow: 
+    0 25px 80px rgba(59, 130, 246, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+    0 0 60px rgba(59, 130, 246, 0.4);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.prominent-share-button:active {
+  transform: translateX(-50%) translateY(-2px) scale(1.02);
+}
+
+.share-button-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: relative;
+  z-index: 2;
+}
+
+.share-button-icon {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+  animation: iconRotate 3s ease-in-out infinite;
+}
+
+.share-button-icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.share-button-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.share-button-label {
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  line-height: 1.2;
+}
+
+.share-button-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.share-button-glow {
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.6), rgba(37, 99, 235, 0.4));
+  border-radius: 1.5rem;
+  opacity: 0;
+  animation: glowPulse 2s ease-in-out infinite;
+  z-index: 1;
+  filter: blur(8px);
+}
+
+@keyframes shareButtonPulse {
+  0%, 100% {
+    box-shadow: 
+      0 20px 60px rgba(59, 130, 246, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+      0 0 40px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 
+      0 25px 80px rgba(59, 130, 246, 0.5),
+      0 0 0 1px rgba(255, 255, 255, 0.15) inset,
+      0 0 60px rgba(59, 130, 246, 0.4);
+  }
+}
+
+@keyframes shareButtonFloat {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-8px);
+  }
+}
+
+@keyframes iconRotate {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(5deg) scale(1.05);
+  }
+  50% {
+    transform: rotate(0deg) scale(1.1);
+  }
+  75% {
+    transform: rotate(-5deg) scale(1.05);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+/* Share button transition */
+.share-button-enter-active {
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.share-button-leave-active {
+  transition: all 0.3s ease-out;
+}
+
+.share-button-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px) scale(0.8);
+}
+
+.share-button-enter-to {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.share-button-leave-from {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.share-button-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px) scale(0.9);
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .prominent-share-button {
+    bottom: 5rem;
+    padding: 1rem 1.5rem;
+    /* min-width: 280px; */
+    border-radius: 1.25rem;
+  }
+
+  .share-button-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .share-button-icon svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .share-button-label {
+    font-size: 1rem;
+  }
+
+  .share-button-subtitle {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .prominent-share-button {
+    bottom: 4.5rem;
+    padding: 0.875rem 1.25rem;
+    /* min-width: 280px; */
+    max-width: 85%;
+  }
+
+  .share-button-content {
+    gap: 0.75rem;
+  }
+
+  .share-button-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .share-button-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .share-button-label {
+    font-size: 0.9375rem;
+  }
+
+  .share-button-subtitle {
+    font-size: 0.75rem;
+  }
 }
 </style>
