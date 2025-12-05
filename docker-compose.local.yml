@@ -123,6 +123,26 @@ services:
     # Note: Flower monitors all workers on the broker, not just one app
     command: celery flower --port=5555 --broker=redis://redis:6379/0 --address=0.0.0.0
 
+  # Nuxt Frontend (Development)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: short5_frontend
+    environment:
+      NUXT_PUBLIC_API_BASE_URL: ${BACKEND_BASE_URL}/api/v1
+      NUXT_PUBLIC_BACKEND_BASE_URL: ${BACKEND_BASE_URL}  # Use localhost for browser access (not Docker internal hostname)
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - short5_network
+    command: npm run dev
+
 volumes:
   postgres_data:
   redis_data:
