@@ -475,7 +475,11 @@ const getAbsoluteUrl = (url: string): string => {
   return `${backendBaseUrl}/${url}`
 }
 
-const isAdmin = computed(() => authStore.user?.is_admin === true)
+// Check admin status - handle both boolean and string from localStorage
+const isAdmin = computed(() => {
+  const adminStatus = authStore.user?.is_admin
+  return adminStatus === true || adminStatus === 'true'
+})
 
 const tabs = [
   { id: 'stats', label: t('admin.tabs.overview') },
@@ -688,6 +692,23 @@ watch(activeTab, (newTab) => {
 })
 
 onMounted(() => {
+  // Initialize auth from storage on mount
+  authStore.initFromStorage()
+  
+  // Double-check admin status on client-side (handle both boolean and string)
+  if (!authStore.isAuthenticated) {
+    navigateTo('/login')
+    return
+  }
+  
+  const adminStatus = authStore.user?.is_admin
+  const isUserAdmin = adminStatus === true || adminStatus === 'true'
+  if (!isUserAdmin) {
+    navigateTo('/')
+    return
+  }
+  
+  // Load stats if admin
   if (isAdmin.value) {
     loadStats()
   }

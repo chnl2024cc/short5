@@ -151,6 +151,7 @@ export const useAuthStore = defineStore('auth', {
           id: string
           username: string
           email: string
+          is_admin: boolean
           created_at: string
           stats: {
             videos_uploaded: number

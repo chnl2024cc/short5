@@ -87,6 +87,7 @@ async def get_current_user_profile(
                 id=str(current_user.id),
                 username=username,
                 email=email,
+                is_admin=current_user.is_admin,
                 created_at=created_at_str,
                 stats=stats,
             )

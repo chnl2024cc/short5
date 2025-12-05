@@ -36,6 +36,7 @@ class UserProfileResponse(BaseModel):
     id: str
     username: str
     email: str
+    is_admin: bool = False
     created_at: Optional[str] = None
     stats: UserStats
 
