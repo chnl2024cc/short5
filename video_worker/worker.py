@@ -212,17 +212,19 @@ def check_mp4_faststart(file_path: Path) -> bool:
 def get_video_metadata(file_path: Path) -> tuple[Optional[dict], Optional[str]]:
     """
     Get all video metadata in a single ffprobe call
+    Checks format, codecs, and web optimization status
     
     Returns:
         (metadata_dict, error_message)
-        metadata_dict contains: format_name, duration, is_mp4, has_faststart
+        metadata_dict contains: format_name, duration, is_mp4, has_faststart, is_web_optimized, video_codec, audio_codec
     """
     try:
-        # Single ffprobe call to get format name and duration
+        # Single ffprobe call to get format, codecs, and pixel format
         ffprobe_cmd = [
             "ffprobe",
             "-v", "error",
             "-show_entries", "format=format_name:format=duration",
+            "-show_entries", "stream=codec_name:stream=codec_type:stream=pix_fmt",
             "-of", "json",  # Use JSON for structured output
             str(file_path),
         ]
@@ -241,6 +243,7 @@ def get_video_metadata(file_path: Path) -> tuple[Optional[dict], Optional[str]]:
         try:
             probe_data = json.loads(result.stdout)
             format_info = probe_data.get("format", {})
+            streams = probe_data.get("streams", [])
             
             format_name = format_info.get("format_name", "").lower()
             duration_str = format_info.get("duration")
@@ -258,16 +261,49 @@ def get_video_metadata(file_path: Path) -> tuple[Optional[dict], Optional[str]]:
             # Check if it's MP4 format
             is_mp4 = "mp4" in format_name or "mov" in format_name
             
+            # Extract video and audio codecs
+            video_codec = None
+            audio_codec = None
+            pixel_format = None
+            
+            for stream in streams:
+                codec_type = stream.get("codec_type", "").lower()
+                codec_name = stream.get("codec_name", "").lower()
+                
+                if codec_type == "video" and video_codec is None:
+                    video_codec = codec_name
+                    pixel_format = stream.get("pix_fmt", "").lower()
+                elif codec_type == "audio" and audio_codec is None:
+                    audio_codec = codec_name
+            
             # Check faststart for MP4 files
             has_faststart = False
             if is_mp4 and file_path.suffix.lower() == ".mp4":
                 has_faststart = check_mp4_faststart(file_path)
+            
+            # Check web optimization criteria:
+            # 1. MP4 container
+            # 2. H.264/AVC video codec
+            # 3. AAC audio codec (or MP3 as fallback)
+            # 4. Faststart enabled
+            # 5. YUV420P pixel format (for maximum compatibility)
+            is_web_optimized = (
+                is_mp4 and
+                video_codec in ["h264", "avc", "libx264"] and
+                audio_codec in ["aac", "mp3"] and
+                has_faststart and
+                pixel_format in ["yuv420p", "yuvj420p"]  # yuvj420p is also compatible
+            )
             
             metadata = {
                 "format_name": format_name,
                 "duration": duration,
                 "is_mp4": is_mp4,
                 "has_faststart": has_faststart,
+                "is_web_optimized": is_web_optimized,
+                "video_codec": video_codec,
+                "audio_codec": audio_codec,
+                "pixel_format": pixel_format,
             }
             
             return metadata, None
@@ -632,38 +668,60 @@ def process_video(self, video_id: str, file_path: str):
         print(f"     Format: {metadata['format_name']}")
         print(f"     Duration: {metadata['duration']:.2f} seconds")
         print(f"     Is MP4: {metadata['is_mp4']}")
+        print(f"     Video codec: {metadata.get('video_codec', 'unknown')}")
+        print(f"     Audio codec: {metadata.get('audio_codec', 'unknown')}")
+        print(f"     Pixel format: {metadata.get('pixel_format', 'unknown')}")
         print(f"     Has faststart: {metadata['has_faststart']}")
+        print(f"     Web optimized: {metadata['is_web_optimized']}")
         
         # Store duration for later use
         duration = metadata["duration"]
         is_mp4 = metadata["is_mp4"]
         has_faststart = metadata["has_faststart"]
+        is_web_optimized = metadata["is_web_optimized"]
         
         # Create output directory
         output_dir = TEMP_DIR / video_id
         output_dir.mkdir(exist_ok=True)
         
         # Step 2: Determine if transcoding is needed
-        # Transcode if: not MP4, or MP4 without faststart
-        needs_transcoding = not is_mp4 or (is_mp4 and not has_faststart)
+        # Transcode if video is not fully web-optimized:
+        # - Not MP4 format, OR
+        # - MP4 but missing faststart, OR
+        # - Wrong video codec (not H.264), OR
+        # - Wrong audio codec (not AAC/MP3), OR
+        # - Wrong pixel format (not YUV420P)
+        needs_transcoding = not is_web_optimized
         
         if not needs_transcoding:
-            print("  ✓ File is already MP4 with faststart - no transcoding needed")
+            print("  ✓ File is already web-optimized - no transcoding needed")
+            print("     (MP4, H.264, AAC/MP3, faststart, YUV420P)")
             # Copy file directly to output directory (no transcoding needed)
             mp4_path = output_dir / f"{video_id}.mp4"
             import shutil
             shutil.copy2(input_path, mp4_path)
             print("  ✓ MP4 file copied (transcoding skipped)")
         else:
-            if is_mp4 and not has_faststart:
-                print("  → File is MP4 but lacks faststart - transcoding to add faststart...")
-            else:
-                print("  → File is not MP4 - transcoding required...")
+            # Provide detailed reason for transcoding
+            reasons = []
+            if not is_mp4:
+                reasons.append("not MP4 format")
+            if not has_faststart:
+                reasons.append("missing faststart")
+            if metadata.get('video_codec') not in ["h264", "avc", "libx264"]:
+                reasons.append(f"video codec is {metadata.get('video_codec', 'unknown')} (needs H.264)")
+            if metadata.get('audio_codec') not in ["aac", "mp3"]:
+                reasons.append(f"audio codec is {metadata.get('audio_codec', 'unknown')} (needs AAC/MP3)")
+            if metadata.get('pixel_format') not in ["yuv420p", "yuvj420p"]:
+                reasons.append(f"pixel format is {metadata.get('pixel_format', 'unknown')} (needs YUV420P)")
             
-            # Transcode to MP4 (simple, universal format) with faststart
+            print(f"  → File is not web-optimized - transcoding required")
+            print(f"     Reasons: {', '.join(reasons)}")
+            
+            # Transcode to MP4 (web-optimized format) with faststart
             mp4_path = output_dir / f"{video_id}.mp4"
             transcode_to_mp4(input_path, mp4_path)
-            print("  ✓ MP4 transcoding complete (with faststart)")
+            print("  ✓ MP4 transcoding complete (web-optimized with H.264, AAC, faststart, YUV420P)")
         
         # Step 3: Create thumbnail
         print("  → Creating thumbnail...")
