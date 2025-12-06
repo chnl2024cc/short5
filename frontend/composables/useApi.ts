@@ -11,6 +11,9 @@ export const useApi = () => {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> => {
+    // Check if this is an auth endpoint (login, register, refresh) - these don't need/use tokens
+    const isAuthEndpoint = endpoint.startsWith('/auth/')
+    
     // Get auth store fresh on each request to ensure we have the latest token
     const authStore = useAuthStore()
     
@@ -22,24 +25,28 @@ export const useApi = () => {
     
     // Get token - try store first, then localStorage as fallback
     // Always read fresh from localStorage as fallback to ensure we have the latest token
-    let token = authStore.token
-    if (!token && import.meta.client) {
-      token = localStorage.getItem('token')
-      // If we got token from localStorage, update the store
-      if (token) {
-        authStore.token = token
-        // Also get refresh token if available
-        const refreshToken = localStorage.getItem('refreshToken')
-        if (refreshToken) {
-          authStore.refreshToken = refreshToken
-        }
-        // Also get user if available
-        const userStr = localStorage.getItem('user')
-        if (userStr) {
-          try {
-            authStore.user = JSON.parse(userStr)
-          } catch (e) {
-            console.warn('Failed to parse user from localStorage:', e)
+    // Skip for auth endpoints
+    let token: string | null = null
+    if (!isAuthEndpoint) {
+      token = authStore.token
+      if (!token && import.meta.client) {
+        token = localStorage.getItem('token')
+        // If we got token from localStorage, update the store
+        if (token) {
+          authStore.token = token
+          // Also get refresh token if available
+          const refreshToken = localStorage.getItem('refreshToken')
+          if (refreshToken) {
+            authStore.refreshToken = refreshToken
+          }
+          // Also get user if available
+          const userStr = localStorage.getItem('user')
+          if (userStr) {
+            try {
+              authStore.user = JSON.parse(userStr)
+            } catch (e) {
+              console.warn('Failed to parse user from localStorage:', e)
+            }
           }
         }
       }
@@ -104,7 +111,8 @@ export const useApi = () => {
     const response = await fetch(`${apiBaseUrl}${endpoint}`, fetchOptions)
 
     // Handle 401 Unauthorized - token might be expired, try to refresh
-    if (response.status === 401 && import.meta.client) {
+    // Skip refresh logic for auth endpoints (login, register, refresh)
+    if (response.status === 401 && import.meta.client && !isAuthEndpoint) {
       const authStore = useAuthStore()
       const refreshToken = authStore.refreshToken || (import.meta.client ? localStorage.getItem('refreshToken') : null)
       
