@@ -17,6 +17,8 @@ from app.models.user import User
 from app.models.video import Video, VideoStatus
 from app.models.vote import Vote, VoteDirection
 from app.models.view import View
+from app.models.share import ShareLink
+from app.models.share_click import ShareClick
 from app.models.user_liked_video import UserLikedVideo
 from app.schemas.video import (
     VideoResponse,
@@ -26,6 +28,10 @@ from app.schemas.video import (
     VoteResponse,
     ViewRequest,
     ViewResponse,
+    ShareRequest,
+    ShareResponse,
+    ShareClickRequest,
+    ShareClickResponse,
 )
 from app.celery_app import celery_app
 from app.services.video_deletion import video_deletion_service
@@ -604,4 +610,148 @@ async def record_view(
     await db.commit()
     
     return ViewResponse(message="View recorded")
+
+
+@router.post("/{video_id}/share", response_model=ShareResponse)
+async def record_share(
+    video_id: str,
+    share_data: ShareRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Record video share creation event
+    
+    Creates a new share record when a user generates a share link.
+    - sharer_session_id: Who created the share (always required)
+    - created_at: Timestamp when share link was created
+    """
+    # Check if video exists
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    
+    if not video:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Video not found",
+        )
+    
+    # Require sharer_session_id
+    if not share_data.sharer_session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sharer_session_id is required",
+        )
+    
+    try:
+        sharer_uuid = uuid.UUID(share_data.sharer_session_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid sharer_session_id format",
+        )
+    
+    # Check if share link already exists (same sharer + video)
+    # If it exists, return existing share link (idempotent)
+    existing_share_link = await db.execute(
+        select(ShareLink).where(
+            ShareLink.video_id == video.id,
+            ShareLink.sharer_session_id == sharer_uuid,
+        )
+    )
+    share_link = existing_share_link.scalar_one_or_none()
+    
+    if share_link:
+        # Share link already exists - return it (idempotent operation)
+        return ShareResponse(
+            message="Share link already exists",
+            video_id=str(video.id),
+            share_id=str(share_link.id)
+        )
+    
+    # Create new share link record
+    share_link = ShareLink(
+        video_id=video.id,
+        sharer_session_id=sharer_uuid,
+    )
+    db.add(share_link)
+    await db.commit()
+    await db.refresh(share_link)
+    
+    return ShareResponse(
+        message="Share link created",
+        video_id=str(video.id),
+        share_id=str(share_link.id)
+    )
+
+
+@router.post("/{video_id}/share/click", response_model=ShareClickResponse)
+async def record_share_click(
+    video_id: str,
+    click_data: ShareClickRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Record share link click event
+    
+    Creates a new click record when someone opens a shared link.
+    Allows tracking multiple clicks per share.
+    - sharer_session_id: Who created the original share (from ref parameter)
+    - clicker_session_id: Who clicked the link (always required)
+    - clicked_at: Timestamp when link was clicked
+    """
+    # Check if video exists
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    
+    if not video:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Video not found",
+        )
+    
+    # Require both session IDs
+    if not click_data.sharer_session_id or not click_data.clicker_session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Both sharer_session_id and clicker_session_id are required",
+        )
+    
+    try:
+        sharer_uuid = uuid.UUID(click_data.sharer_session_id)
+        clicker_uuid = uuid.UUID(click_data.clicker_session_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session_id format",
+        )
+    
+    # Find the share link record (create it if it doesn't exist - fallback)
+    share_link_result = await db.execute(
+        select(ShareLink).where(
+            ShareLink.video_id == video.id,
+            ShareLink.sharer_session_id == sharer_uuid,
+        )
+    )
+    share_link = share_link_result.scalar_one_or_none()
+    
+    if not share_link:
+        # Share link doesn't exist - create it (fallback for edge cases)
+        share_link = ShareLink(
+            video_id=video.id,
+            sharer_session_id=sharer_uuid,
+        )
+        db.add(share_link)
+        await db.flush()  # Get the share_link.id without committing
+    
+    # Create click record (always create new - allows multiple clicks per share link)
+    share_click = ShareClick(
+        share_link_id=share_link.id,
+        clicker_session_id=clicker_uuid,
+        video_id=video.id,
+    )
+    db.add(share_click)
+    await db.commit()
+    
+    return ShareClickResponse(
+        message="Share click recorded",
+        video_id=str(video.id)
+    )
 

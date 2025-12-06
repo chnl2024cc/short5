@@ -38,11 +38,33 @@ export const useShareVideo = (options: ShareVideoOptions = {}) => {
     if (!process.client) return
 
     try {
+      // Always use session_id for consistent analytics (both authenticated and anonymous users have session_id)
+      const { useSession } = await import('~/composables/useSession')
+      const { getOrCreateSessionId } = useSession()
+      const sharerId = getOrCreateSessionId()
+      
       // Use composable for consistent URL generation
       const { siteOrigin } = usePublicAsset()
-      const shareUrl = `${siteOrigin.value}/?video=${video.id}`
+      // Include sharer identifier in URL as 'ref' parameter
+      const shareUrl = `${siteOrigin.value}/?video=${video.id}&ref=${sharerId}`
+      
+      // Create database entry when share link is generated (SHALL requirement)
+      try {
+        const { useApi } = await import('~/composables/useApi')
+        const api = useApi()
+        await api.post(`/videos/${video.id}/share`, {
+          sharer_session_id: sharerId,
+          // No clicker_session_id - this is share link generation, not a click
+        })
+      } catch (error) {
+        // Don't block sharing if tracking fails
+        console.warn('Failed to track share creation:', error)
+      }
+      
       const title = video.title || t(`${translationPrefix}.checkOutVideo`)
       const text = (video as Video).description || ''
+
+      let shareSuccessful = false
 
       // Try to use Web Share API if available (mobile/iOS Safari)
       // IMPORTANT: This must be called synchronously within the user gesture context
@@ -53,11 +75,11 @@ export const useShareVideo = (options: ShareVideoOptions = {}) => {
             text,
             url: shareUrl,
           })
+          shareSuccessful = true
           // If share was successful and callback is provided, show notification
           if (onCopied) {
             onCopied()
           }
-          return
         } catch (err: any) {
           // User cancelled - don't show error, just return silently
           if (err.name === 'AbortError') {
@@ -68,23 +90,27 @@ export const useShareVideo = (options: ShareVideoOptions = {}) => {
         }
       }
 
-      // Fall back to clipboard
-      try {
-        await navigator.clipboard.writeText(shareUrl)
-        
-        // Show success notification
-        if (onCopied) {
-          onCopied()
-        } else {
-          // Fallback to alert if no callback provided
-          alert(t(`${translationPrefix}.linkCopied`) || 'Link copied to clipboard')
+      // Fall back to clipboard if Web Share API not available or failed
+      if (!shareSuccessful) {
+        try {
+          await navigator.clipboard.writeText(shareUrl)
+          shareSuccessful = true
+          
+          // Show success notification
+          if (onCopied) {
+            onCopied()
+          } else {
+            // Fallback to alert if no callback provided
+            alert(t(`${translationPrefix}.linkCopied`) || 'Link copied to clipboard')
+          }
+        } catch (clipboardError) {
+          // Clipboard API might not be available (some browsers/iOS versions)
+          console.error('Clipboard API failed:', clipboardError)
+          // Final fallback: show the URL in an alert
+          const shareLinkText = t(`${translationPrefix}.shareLink`) || 'Share link'
+          alert(`${shareLinkText}: ${shareUrl}`)
+          shareSuccessful = true // User saw the link, consider it shared
         }
-      } catch (clipboardError) {
-        // Clipboard API might not be available (some browsers/iOS versions)
-        console.error('Clipboard API failed:', clipboardError)
-        // Final fallback: show the URL in an alert
-        const shareLinkText = t(`${translationPrefix}.shareLink`) || 'Share link'
-        alert(`${shareLinkText}: ${shareUrl}`)
       }
     } catch (error) {
       console.error('Failed to share video:', error)

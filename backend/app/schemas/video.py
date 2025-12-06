@@ -73,3 +73,28 @@ class ViewRequest(BaseModel):
 
 class ViewResponse(BaseModel):
     message: str
+
+
+class ShareRequest(BaseModel):
+    sharer_session_id: str  # Who created the share (always required)
+
+
+class ShareClickRequest(BaseModel):
+    sharer_session_id: str  # Who created the original share (from ref parameter)
+    clicker_session_id: str  # Who clicked the link (always required)
+
+
+class ShareResponse(BaseModel):
+    message: str
+    video_id: str
+    share_id: Optional[str] = None  # ID of the created share
+
+
+class ShareClickResponse(BaseModel):
+    message: str
+    video_id: str
+
+
+class ShareClickResponse(BaseModel):
+    message: str
+    video_id: str

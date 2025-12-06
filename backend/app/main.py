@@ -216,6 +216,27 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"Could not migrate votes table: {e}", exc_info=True)
             # Don't fail startup if migration fails
+        
+        # Check if share_links table exists (for tracking video share links)
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'share_links'
+                    )
+                """))
+                if not result.scalar():
+                    logger.info("Creating share_links table...")
+                    # The table will be created by SQLAlchemy Base.metadata.create_all
+                    # But we can verify it exists after creation
+                    logger.info("✓ share_links table will be created by SQLAlchemy")
+                else:
+                    logger.info("✓ share_links table already exists")
+        except Exception as e:
+            logger.warning(f"Could not verify share_links table: {e}", exc_info=True)
+            # Don't fail startup if check fails
             
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}", exc_info=True)

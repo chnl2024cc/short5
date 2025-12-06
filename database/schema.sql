@@ -84,6 +84,36 @@ CREATE INDEX idx_views_video_id ON views(video_id);
 CREATE INDEX idx_views_user_id ON views(user_id);
 CREATE INDEX idx_views_created_at ON views(created_at);
 
+-- Share Links Table (for tracking share link creation)
+-- Tracks when users create share links
+-- Always uses session_id for consistent analytics (both authenticated and anonymous users have session_id)
+CREATE TABLE share_links (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    sharer_session_id UUID NOT NULL, -- Who created the share link
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- When share link was created
+);
+
+CREATE INDEX idx_share_links_video_id ON share_links(video_id);
+CREATE INDEX idx_share_links_sharer_session_id ON share_links(sharer_session_id);
+CREATE INDEX idx_share_links_created_at ON share_links(created_at);
+
+-- Share Clicks Table (for tracking share link clicks)
+-- Tracks each time someone clicks a shared link (allows multiple clicks per share link)
+-- Always uses session_id for consistent analytics
+CREATE TABLE share_clicks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    share_link_id UUID NOT NULL REFERENCES share_links(id) ON DELETE CASCADE,
+    clicker_session_id UUID NOT NULL, -- Who clicked the link
+    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE, -- For easier querying
+    clicked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- When link was clicked
+);
+
+CREATE INDEX idx_share_clicks_share_link_id ON share_clicks(share_link_id);
+CREATE INDEX idx_share_clicks_clicker_session_id ON share_clicks(clicker_session_id);
+CREATE INDEX idx_share_clicks_video_id ON share_clicks(video_id);
+CREATE INDEX idx_share_clicks_clicked_at ON share_clicks(clicked_at);
+
 -- Reports Table (for moderation)
 CREATE TYPE report_type AS ENUM ('video', 'user');
 CREATE TYPE report_status AS ENUM ('pending', 'resolved', 'dismissed');

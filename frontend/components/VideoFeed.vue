@@ -375,6 +375,30 @@ watch(() => currentIndex.value, () => {
   videoStartedForHint.value = false
 })
 
+// Track share click when a shared link is opened
+const trackShareClick = async (videoId: string, sharerId: string) => {
+  if (!process.client) return
+  
+  try {
+    // Get clicker's session_id (the person who opened the link)
+    const { useSession } = await import('~/composables/useSession')
+    const { getOrCreateSessionId } = useSession()
+    const clickerId = getOrCreateSessionId()
+    
+    // Track share click - creates new click record (allows multiple clicks per share)
+    const clickPayload: { sharer_session_id: string; clicker_session_id: string } = {
+      sharer_session_id: sharerId, // Who created the share
+      clicker_session_id: clickerId, // Who opened the link
+    }
+    
+    await api.post(`/videos/${videoId}/share/click`, clickPayload)
+    console.log(`Tracked share click for video ${videoId} - sharer: ${sharerId}, clicker: ${clickerId}`)
+  } catch (error) {
+    // Don't block user experience if share tracking fails
+    console.warn('Failed to track share click:', error)
+  }
+}
+
 const initializeFeed = async () => {
   // Reset feed state
   videos.value = []
@@ -386,6 +410,14 @@ const initializeFeed = async () => {
   
   // Check if there's a video query parameter
   const videoId = route.query.video as string | undefined
+  const sharerId = route.query.ref as string | undefined
+  
+  // Track share click if both video and ref parameters are present
+  if (videoId && sharerId && process.client) {
+    // Track share click asynchronously (don't block feed loading)
+    trackShareClick(videoId, sharerId)
+  }
+  
   if (videoId) {
     targetVideoId.value = videoId
     // Try to load the target video directly first
