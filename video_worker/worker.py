@@ -4,7 +4,7 @@ Processes videos: transcodes to MP4, creates thumbnails, stores in local Docker 
 """
 import os
 import subprocess
-import asyncio
+import json
 from pathlib import Path
 from typing import Optional
 # boto3 removed - using local storage only
@@ -85,32 +85,23 @@ def update_video_status(video_id: str, status: str, **kwargs):
             update_fields = {"status": status}
             update_fields.update(kwargs)
             
-            # Debug: Log what we're updating
-            print(f"  [DB UPDATE] Video {video_id}: {list(update_fields.keys())}")
-            if "url_mp4" in update_fields:
-                print(f"  [DB UPDATE] url_mp4 value: {update_fields['url_mp4']}")
+            print(f"  → Updating video {video_id}: status={status}")
             
-            # Convert video_id to UUID if it's a string
+            # Convert video_id to UUID
             video_uuid = UUID(video_id) if isinstance(video_id, str) else video_id
             
-            # Build SET clause with proper parameter names
-            set_parts = []
-            params = {}
+            # Build SQL with explicit parameter binding for each field
+            # This avoids issues with dynamic SQL generation
+            set_clauses = []
+            params = {"video_id": str(video_uuid)}
             
             for key, value in update_fields.items():
-                param_name = f"update_{key}"
-                set_parts.append(f"{key} = :{param_name}")
+                param_name = f"val_{key}"
+                set_clauses.append(f"{key} = :{param_name}")
                 params[param_name] = value
             
-            # Add video_id as parameter (will be cast to UUID in SQL)
-            params["video_id"] = str(video_uuid)
-            
-            set_clause = ", ".join(set_parts)
-            # Debug: Print the SQL query being executed
-            print(f"  [DB UPDATE] SQL: UPDATE videos SET {set_clause} WHERE id = :video_id")
-            print(f"  [DB UPDATE] Params: {list(params.keys())}")
-            
-            # Use CAST in SQL instead of :: syntax to avoid parameter binding issues
+            # Build the UPDATE query
+            set_clause = ", ".join(set_clauses)
             query = text(f"""
                 UPDATE videos 
                 SET {set_clause}, updated_at = CURRENT_TIMESTAMP
@@ -120,31 +111,13 @@ def update_video_status(video_id: str, status: str, **kwargs):
             result = session.execute(query, params)
             session.commit()
             
-            rows_updated = result.rowcount
-            if rows_updated == 0:
-                print(f"⚠ WARNING: No rows updated for video_id {video_id}")
-                # Try to verify the video exists
-                check_query = text("SELECT id, status, url_mp4 FROM videos WHERE id = CAST(:video_id AS uuid)")
-                check_result = session.execute(check_query, {"video_id": str(video_uuid)})
-                row = check_result.fetchone()
-                if row:
-                    print(f"  [DB UPDATE] Video exists: status={row[1]}, url_mp4={row[2]}")
-                else:
-                    print(f"  [DB UPDATE] Video does not exist in database!")
+            if result.rowcount == 0:
+                print(f"  ⚠ No rows updated for video {video_id}")
             else:
-                print(f"✓ Database updated: {rows_updated} row(s) for video {video_id}")
-                if "url_mp4" in update_fields:
-                    print(f"  [DB UPDATE] ✓ url_mp4 saved: {update_fields['url_mp4']}")
-                    # Verify it was actually saved
-                    verify_query = text("SELECT url_mp4 FROM videos WHERE id = CAST(:video_id AS uuid)")
-                    verify_result = session.execute(verify_query, {"video_id": str(video_uuid)})
-                    saved_value = verify_result.scalar()
-                    print(f"  [DB UPDATE] Verification: url_mp4 in DB = {saved_value}")
+                print(f"  ✓ Database updated")
                 
     except Exception as e:
-        print(f"✗ ERROR updating video status for {video_id}: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"✗ ERROR updating video status: {e}")
         raise
 
 
@@ -202,73 +175,58 @@ def cleanup_failed_video(video_id: str, file_path: Path):
     return cleaned
 
 
-def is_mp4_file(file_path: Path) -> tuple[bool, Optional[str]]:
+def check_mp4_faststart(file_path: Path) -> bool:
     """
-    Check if file is MP4 format (both extension and container format)
-    Returns: (is_mp4, error_message)
-    """
-    # Check file extension
-    if file_path.suffix.lower() != ".mp4":
-        return False, None
+    Check if MP4 file has faststart (moov atom before mdat atom)
+    Faststart means the metadata is at the beginning, allowing streaming without full download
     
-    # Verify container format with ffprobe
+    Returns:
+        True if faststart is enabled (moov before mdat), False otherwise
+    """
     try:
-        ffprobe_cmd = [
-            "ffprobe",
-            "-v", "error",
-            "-show_entries", "format=format_name",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            str(file_path),
-        ]
-        result = subprocess.run(
-            ffprobe_cmd,
-            capture_output=True,
-            text=True,
-            timeout=10,  # 10 second timeout for format check
-        )
+        # Read first 64KB to check atom order (moov should appear early if faststart is enabled)
+        with open(file_path, 'rb') as f:
+            header = f.read(65536)  # 64KB should be enough to find moov atom if it's at the start
         
-        if result.returncode != 0:
-            return False, f"Could not verify MP4 format: {result.stderr[:200]}"
+        # Find positions of key atoms
+        moov_pos = header.find(b'moov')
+        mdat_pos = header.find(b'mdat')
         
-        # Check if format contains 'mp4' or 'mov' (MP4 container)
-        format_name = result.stdout.strip().lower()
-        if "mp4" in format_name or "mov" in format_name:
-            return True, None
-        else:
-            return False, f"File has .mp4 extension but container format is: {format_name}"
+        # If moov is not found, file might be corrupted or not a valid MP4
+        if moov_pos == -1:
+            return False
         
-    except subprocess.TimeoutExpired:
-        return False, "MP4 format check timed out"
+        # Faststart means moov comes before mdat
+        # If mdat is not found in header, moov is definitely at the start (good sign)
+        if mdat_pos == -1:
+            return True
+        
+        # Check if moov comes before mdat
+        return moov_pos < mdat_pos
+        
     except Exception as e:
-        return False, f"Error checking MP4 format: {str(e)[:200]}"
+        print(f"  ⚠ Could not check faststart: {e}")
+        return False
 
 
-def validate_video_file(file_path: Path) -> tuple[bool, Optional[str]]:
+def get_video_metadata(file_path: Path) -> tuple[Optional[dict], Optional[str]]:
     """
-    Validate video file before processing
-    Returns: (is_valid, error_message)
+    Get all video metadata in a single ffprobe call
+    
+    Returns:
+        (metadata_dict, error_message)
+        metadata_dict contains: format_name, duration, is_mp4, has_faststart
     """
-    # Check file exists
-    if not file_path.exists():
-        return False, "Video file not found"
-    
-    # Check file is not empty
-    if file_path.stat().st_size == 0:
-        return False, "Video file is empty or corrupted"
-    
-    # Check file is readable
-    if not os.access(file_path, os.R_OK):
-        return False, "Video file is not readable"
-    
-    # Try to get basic video info with ffprobe to check if file is valid
     try:
+        # Single ffprobe call to get format name and duration
         ffprobe_cmd = [
             "ffprobe",
             "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "-show_entries", "format=format_name:format=duration",
+            "-of", "json",  # Use JSON for structured output
             str(file_path),
         ]
+        
         result = subprocess.run(
             ffprobe_cmd,
             capture_output=True,
@@ -277,22 +235,199 @@ def validate_video_file(file_path: Path) -> tuple[bool, Optional[str]]:
         )
         
         if result.returncode != 0:
-            return False, f"Video file is corrupted or invalid format: {result.stderr[:200]}"
+            return None, f"Could not probe video file: {result.stderr[:200]}"
         
-        # Check if duration is valid
+        # Parse JSON output
         try:
-            duration = float(result.stdout.strip())
-            if duration <= 0:
-                return False, "Video has invalid duration (0 or negative)"
-        except (ValueError, AttributeError):
-            return False, "Could not determine video duration - file may be corrupted"
+            probe_data = json.loads(result.stdout)
+            format_info = probe_data.get("format", {})
+            
+            format_name = format_info.get("format_name", "").lower()
+            duration_str = format_info.get("duration")
+            
+            if not duration_str:
+                return None, "Could not determine video duration"
+            
+            try:
+                duration = float(duration_str)
+                if duration <= 0:
+                    return None, "Video has invalid duration (0 or negative)"
+            except (ValueError, TypeError):
+                return None, "Could not parse video duration"
+            
+            # Check if it's MP4 format
+            is_mp4 = "mp4" in format_name or "mov" in format_name
+            
+            # Check faststart for MP4 files
+            has_faststart = False
+            if is_mp4 and file_path.suffix.lower() == ".mp4":
+                has_faststart = check_mp4_faststart(file_path)
+            
+            metadata = {
+                "format_name": format_name,
+                "duration": duration,
+                "is_mp4": is_mp4,
+                "has_faststart": has_faststart,
+            }
+            
+            return metadata, None
+            
+        except json.JSONDecodeError as e:
+            return None, f"Could not parse ffprobe output: {str(e)[:200]}"
         
     except subprocess.TimeoutExpired:
-        return False, "Video file validation timed out - file may be corrupted"
+        return None, "Video metadata extraction timed out"
     except Exception as e:
-        return False, f"Error validating video file: {str(e)[:200]}"
+        return None, f"Error getting video metadata: {str(e)[:200]}"
+
+
+def get_detailed_video_metadata(file_path: Path) -> tuple[Optional[dict], Optional[str]]:
+    """
+    Get detailed technical metadata from processed video file
+    Includes codecs, bitrates, resolution, FPS, faststart status, etc.
     
-    return True, None
+    Returns:
+        (metadata_dict, error_message)
+        metadata_dict contains all technical video information for database storage
+    """
+    try:
+        # Comprehensive ffprobe call to get all technical metadata
+        ffprobe_cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries",
+            "format=format_name:format=bit_rate:format=duration:format=size",
+            "-show_entries",
+            "stream=codec_name:stream=codec_type:stream=bit_rate:stream=width:stream=height:stream=r_frame_rate:stream=pix_fmt:stream=sample_rate:stream=channels",
+            "-of", "json",
+            str(file_path),
+        ]
+        
+        result = subprocess.run(
+            ffprobe_cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        
+        if result.returncode != 0:
+            return None, f"Could not probe video file: {result.stderr[:200]}"
+        
+        try:
+            probe_data = json.loads(result.stdout)
+            format_info = probe_data.get("format", {})
+            streams = probe_data.get("streams", [])
+            
+            # Extract video stream info (usually first video stream)
+            video_stream = None
+            audio_stream = None
+            
+            for stream in streams:
+                codec_type = stream.get("codec_type", "").lower()
+                if codec_type == "video" and video_stream is None:
+                    video_stream = stream
+                elif codec_type == "audio" and audio_stream is None:
+                    audio_stream = stream
+            
+            # Build metadata dictionary
+            metadata = {}
+            
+            # Format info
+            format_name = format_info.get("format_name", "").lower()
+            metadata["container_format"] = format_name
+            
+            # File size
+            if "size" in format_info:
+                try:
+                    metadata["file_size_bytes"] = int(format_info["size"])
+                except (ValueError, TypeError):
+                    pass
+            
+            # Total bitrate (format level)
+            if "bit_rate" in format_info:
+                try:
+                    metadata["total_bitrate_bps"] = int(format_info["bit_rate"])
+                except (ValueError, TypeError):
+                    pass
+            
+            # Video stream info
+            if video_stream:
+                metadata["video_codec"] = video_stream.get("codec_name", "").lower()
+                
+                if "width" in video_stream and "height" in video_stream:
+                    width = video_stream.get("width")
+                    height = video_stream.get("height")
+                    if width and height:
+                        metadata["resolution_width"] = int(width)
+                        metadata["resolution_height"] = int(height)
+                        metadata["resolution"] = f"{width}x{height}"
+                
+                if "bit_rate" in video_stream:
+                    try:
+                        metadata["video_bitrate_bps"] = int(video_stream["bit_rate"])
+                    except (ValueError, TypeError):
+                        pass
+                
+                if "r_frame_rate" in video_stream:
+                    # Parse frame rate (e.g., "30/1" -> 30.0)
+                    fps_str = video_stream["r_frame_rate"]
+                    try:
+                        if "/" in fps_str:
+                            num, den = fps_str.split("/")
+                            metadata["fps"] = round(float(num) / float(den), 2)
+                        else:
+                            metadata["fps"] = float(fps_str)
+                    except (ValueError, ZeroDivisionError):
+                        pass
+                
+                if "pix_fmt" in video_stream:
+                    metadata["pixel_format"] = video_stream["pix_fmt"]
+            
+            # Audio stream info
+            if audio_stream:
+                metadata["audio_codec"] = audio_stream.get("codec_name", "").lower()
+                
+                if "bit_rate" in audio_stream:
+                    try:
+                        metadata["audio_bitrate_bps"] = int(audio_stream["bit_rate"])
+                    except (ValueError, TypeError):
+                        pass
+                
+                if "sample_rate" in audio_stream:
+                    try:
+                        metadata["audio_sample_rate_hz"] = int(audio_stream["sample_rate"])
+                    except (ValueError, TypeError):
+                        pass
+                
+                if "channels" in audio_stream:
+                    try:
+                        metadata["audio_channels"] = int(audio_stream["channels"])
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Check faststart for MP4 files
+            if format_name and "mp4" in format_name and file_path.suffix.lower() == ".mp4":
+                metadata["has_faststart"] = check_mp4_faststart(file_path)
+            else:
+                metadata["has_faststart"] = False
+            
+            # Web playback compatibility flags
+            metadata["web_optimized"] = (
+                metadata.get("video_codec") in ["h264", "avc"] and
+                metadata.get("audio_codec") in ["aac", "mp3"] and
+                metadata.get("has_faststart", False) and
+                format_name and "mp4" in format_name
+            )
+            
+            return metadata, None
+            
+        except json.JSONDecodeError as e:
+            return None, f"Could not parse ffprobe output: {str(e)[:200]}"
+        
+    except subprocess.TimeoutExpired:
+        return None, "Detailed video metadata extraction timed out"
+    except Exception as e:
+        return None, f"Error getting detailed video metadata: {str(e)[:200]}"
 
 
 def transcode_to_mp4(input_path: Path, output_path: Path):
@@ -314,11 +449,16 @@ def transcode_to_mp4(input_path: Path, output_path: Path):
         str(output_path),
     ]
     
+    # Timeout: 25 minutes (slightly less than Celery's soft_time_limit of 25 min)
+    # This ensures we have time for cleanup before hard timeout
+    timeout_seconds = 25 * 60
+    
     result = subprocess.run(
         ffmpeg_cmd,
         check=True,
         capture_output=True,
-        text=True
+        text=True,
+        timeout=timeout_seconds
     )
     
     if result.stderr and "error" in result.stderr.lower():
@@ -327,17 +467,40 @@ def transcode_to_mp4(input_path: Path, output_path: Path):
     return output_path
 
 
-def create_thumbnail(input_path: Path, output_path: Path, timestamp: str = "00:00:01"):
-    """Create thumbnail from video"""
+def create_thumbnail(input_path: Path, output_path: Path, timestamp: str = "00:00:03"):
+    """
+    Create thumbnail from video
+    
+    Args:
+        input_path: Path to input video file
+        output_path: Path where thumbnail will be saved
+        timestamp: Timestamp to capture frame from (default: "00:00:03" = 3 seconds)
+                   Use "00:00:00" for the first frame, or any other timestamp
+    """
+    # Put -ss before -i for faster seeking (seeks before decoding)
+    # This is much faster for formats that support it
     ffmpeg_cmd = [
         "ffmpeg",
+        "-ss", timestamp,  # Seek before input (faster)
         "-i", str(input_path),
-        "-ss", timestamp,
         "-vframes", "1",
-        "-q:v", "2",
+        "-q:v", "2",  # High quality (scale 2-31, lower = better quality)
         str(output_path),
     ]
-    subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
+    
+    # Timeout: 2 minutes (should be quick, but allow for large/slow files)
+    result = subprocess.run(
+        ffmpeg_cmd,
+        check=True,
+        capture_output=True,
+        timeout=120
+    )
+    
+    # Verify thumbnail was created
+    if not output_path.exists():
+        raise FileNotFoundError(f"Thumbnail was not created at {output_path}")
+    
+    return output_path
 
 
 def store_file(local_path: Path, storage_key: str) -> str:
@@ -449,41 +612,60 @@ def process_video(self, video_id: str, file_path: str):
         # Update status to processing (in case it wasn't already)
         update_video_status(video_id, "processing", error_reason=None)
         
-        # Step 1: Validate video file
-        print("  → Validating video file...")
-        is_valid, validation_error = validate_video_file(input_path)
-        if not is_valid:
+        # Step 1: Get all video metadata in one ffprobe call
+        print("  → Getting video metadata (format, duration, faststart check)...")
+        metadata, metadata_error = get_video_metadata(input_path)
+        if metadata_error:
             error_category = "VALIDATION_ERROR"
-            user_friendly_error = f"Video file validation failed: {validation_error}"
+            user_friendly_error = f"Video file validation failed: {metadata_error}"
             print(f"✗ {user_friendly_error}")
-            raise ValueError(validation_error)
-        print("  ✓ Video file is valid")
+            raise ValueError(metadata_error)
         
-        # Step 2: Check if file is already MP4
-        print("  → Checking if file is already MP4 format...")
-        is_mp4, mp4_check_error = is_mp4_file(input_path)
+        # Validate metadata
+        if metadata["duration"] <= 0:
+            error_category = "VALIDATION_ERROR"
+            user_friendly_error = "Video has invalid duration (0 or negative)"
+            print(f"✗ {user_friendly_error}")
+            raise ValueError(user_friendly_error)
+        
+        print(f"  ✓ Video metadata extracted:")
+        print(f"     Format: {metadata['format_name']}")
+        print(f"     Duration: {metadata['duration']:.2f} seconds")
+        print(f"     Is MP4: {metadata['is_mp4']}")
+        print(f"     Has faststart: {metadata['has_faststart']}")
+        
+        # Store duration for later use
+        duration = metadata["duration"]
+        is_mp4 = metadata["is_mp4"]
+        has_faststart = metadata["has_faststart"]
         
         # Create output directory
         output_dir = TEMP_DIR / video_id
         output_dir.mkdir(exist_ok=True)
         
-        if is_mp4:
-            print("  ✓ File is already MP4 format - skipping transcoding")
+        # Step 2: Determine if transcoding is needed
+        # Transcode if: not MP4, or MP4 without faststart
+        needs_transcoding = not is_mp4 or (is_mp4 and not has_faststart)
+        
+        if not needs_transcoding:
+            print("  ✓ File is already MP4 with faststart - no transcoding needed")
             # Copy file directly to output directory (no transcoding needed)
             mp4_path = output_dir / f"{video_id}.mp4"
             import shutil
             shutil.copy2(input_path, mp4_path)
             print("  ✓ MP4 file copied (transcoding skipped)")
         else:
-            if mp4_check_error:
-                print(f"  ℹ Note: {mp4_check_error}")
-            print("  → File is not MP4 - transcoding required...")
-            # Transcode to MP4 (simple, universal format)
+            if is_mp4 and not has_faststart:
+                print("  → File is MP4 but lacks faststart - transcoding to add faststart...")
+            else:
+                print("  → File is not MP4 - transcoding required...")
+            
+            # Transcode to MP4 (simple, universal format) with faststart
             mp4_path = output_dir / f"{video_id}.mp4"
             transcode_to_mp4(input_path, mp4_path)
-            print("  ✓ MP4 transcoding complete")
+            print("  ✓ MP4 transcoding complete (with faststart)")
         
-        # Create thumbnail
+        # Step 3: Create thumbnail
         print("  → Creating thumbnail...")
         thumbnail_path = output_dir / f"{video_id}_thumb.jpg"
         create_thumbnail(input_path, thumbnail_path)
@@ -509,36 +691,52 @@ def process_video(self, video_id: str, file_path: str):
             traceback.print_exc()
             raise
         
-        # Step 5: Get video duration
-        try:
-            ffprobe_cmd = [
-                "ffprobe",
-                "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                str(input_path),
-            ]
-            result = subprocess.run(ffprobe_cmd, capture_output=True, text=True, timeout=30)
-            if result.returncode != 0:
-                raise ValueError(f"Could not get video duration: {result.stderr}")
-            duration = float(result.stdout.strip())
-        except Exception as e:
-            error_category = "METADATA_ERROR"
-            user_friendly_error = "Could not extract video metadata."
-            print(f"✗ ERROR getting video duration: {e}")
-            raise
+        # Step 5: Get detailed technical metadata from processed video
+        # IMPORTANT: Extract metadata from the FINAL processed video file (mp4_path)
+        # This works in both cases: transcoded OR copied - we analyze the final output file
+        print("  → Extracting detailed video metadata from processed video...")
         
-        # Step 6: Update database with processed video URLs
+        # Initialize metadata dict
+        detailed_metadata = {}
+        
+        # Verify mp4_path exists before extracting metadata
+        if not mp4_path.exists():
+            print(f"  ⚠ ERROR: Processed video file not found at {mp4_path}")
+            detailed_metadata = {"error": "Processed video file not found"}
+        else:
+            detailed_metadata, metadata_error = get_detailed_video_metadata(mp4_path)
+            
+            # Ensure we always have a dict (never None)
+            if detailed_metadata is None:
+                print(f"  ⚠ Could not extract metadata: {metadata_error}")
+                detailed_metadata = {"error": metadata_error or "Unknown error"}
+            elif detailed_metadata:
+                print(f"  ✓ Metadata extracted: {list(detailed_metadata.keys())}")
+            else:
+                print(f"  ⚠ Metadata extraction returned empty dict")
+        
+        # Step 6: Update database with processed video URLs and technical metadata
         update_data = {
             "url_mp4": mp4_url,
             "duration_seconds": int(duration),
             "error_reason": None,  # Clear any previous errors
         }
+        
         if thumbnail_url:
             update_data["thumbnail"] = thumbnail_url
         
-        print(f"  → Updating database with: status=ready, url_mp4={mp4_url}, duration={int(duration)}")
-        # Pass status as positional argument, other fields as kwargs
+        # ALWAYS save metadata as JSON (even if empty dict or contains error)
+        # This ensures video_metadata_json is never NULL in the database
+        metadata_json = json.dumps(detailed_metadata, indent=2)
+        update_data["video_metadata_json"] = metadata_json
+        metadata_size = len(metadata_json)
+        print(f"  → Saving technical metadata to database (JSON, {metadata_size} bytes)")
+        if detailed_metadata and "error" not in detailed_metadata:
+            print(f"     Metadata keys: {list(detailed_metadata.keys())}")
+        else:
+            print(f"     Warning: Metadata may be incomplete or contain errors")
+        
+        print(f"  → Updating database with processed video info")
         update_video_status(video_id, "ready", **update_data)
         
         print(f"✓ Video {video_id} processed successfully")
@@ -591,52 +789,13 @@ def process_video(self, video_id: str, file_path: str):
 # When running: celery -A worker worker
 # Celery will import this module and use celery_app
 
-# Register task with additional names to handle cross-app communication
-# This allows the task to be called with different name formats
-# Note: When tasks are sent from another Celery app, they may be prefixed with the app name
-try:
-    # Get the registered task object
-    process_video_task = celery_app.tasks.get("process_video")
-    if process_video_task:
-        # Register additional names that might be used when sending from other apps
-        # The backend app is "short_video_platform", so it might send "short_video_platform.process_video"
-        celery_app.tasks.register(process_video_task, name="worker.process_video")
-        celery_app.tasks.register(process_video_task, name="short_video_platform.process_video")
-        print(f"✓ Registered task aliases: worker.process_video, short_video_platform.process_video")
-    else:
-        print(f"⚠ Task 'process_video' not found in registered tasks")
-except Exception as e:
-    print(f"⚠ Could not register task aliases: {e}")
-    import traceback
-    traceback.print_exc()
-
 # Print startup information when module is imported
 # This will run when Celery worker starts and imports this module
 print("\n" + "="*60)
 print("VIDEO WORKER MODULE LOADED")
 print("="*60)
-print(f"Celery app name: {celery_app.main}")
-print(f"Broker URL: {celery_app.conf.broker_url}")
-print(f"Result backend: {celery_app.conf.result_backend}")
-
-# Force task registration by accessing it
-# This ensures the task decorator has run
-try:
-    _ = process_video
-    print(f"✓ Task function 'process_video' is defined")
-except NameError:
-    print(f"✗ ERROR: Task function 'process_video' not found!")
-
-# List registered tasks (may be empty until worker fully starts)
-try:
-    registered_tasks = [name for name in celery_app.tasks.keys() if 'process_video' in name]
-    if registered_tasks:
-        print(f"✓ Registered tasks containing 'process_video': {registered_tasks}")
-    else:
-        print(f"⚠ No 'process_video' tasks registered yet (will register when worker starts)")
-except Exception as e:
-    print(f"⚠ Could not list tasks: {e}")
-
-print(f"Queue configuration: {celery_app.conf.task_routes}")
+print(f"Celery app: {celery_app.main}")
+print(f"Broker: {celery_app.conf.broker_url}")
+print(f"Task routes configured for: process_video, worker.process_video, short_video_platform.process_video")
 print("="*60 + "\n")
 

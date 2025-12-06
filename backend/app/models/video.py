@@ -59,6 +59,7 @@ class Video(Base):
     file_size_bytes = Column(BigInteger)
     original_filename = Column(String(255))
     error_reason = Column(Text)  # Store error message for failed videos
+    video_metadata_json = Column(Text)  # Store technical video metadata as JSON (codecs, bitrates, resolution, etc.)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -134,6 +134,29 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"Could not verify/add error_reason column: {e}")
             # Don't fail startup if migration fails
+        
+        # Ensure video_metadata_json column exists (migration)
+        try:
+            async with AsyncSessionLocal() as db:
+                # Check if column exists
+                result = await db.execute(text("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'videos' 
+                        AND column_name = 'video_metadata_json'
+                    )
+                """))
+                if not result.scalar():
+                    logger.info("Adding video_metadata_json column to videos table...")
+                    await db.execute(text("ALTER TABLE videos ADD COLUMN video_metadata_json TEXT;"))
+                    await db.commit()
+                    logger.info("✓ video_metadata_json column added successfully")
+                else:
+                    logger.info("✓ video_metadata_json column already exists")
+        except Exception as e:
+            logger.warning(f"Could not verify/add video_metadata_json column: {e}")
+            # Don't fail startup if migration fails
             
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}", exc_info=True)
