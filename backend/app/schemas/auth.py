@@ -15,6 +15,7 @@ class UserCreate(UserBase):
     # Using bcrypt_sha256 allows passwords of any length (no 72-byte limit)
     # Still enforce reasonable min/max for security and UX
     password: str = Field(..., min_length=8, max_length=200)
+    session_id: Optional[str] = None  # For merging anonymous votes
 
 
 class UserResponse(UserBase):
@@ -47,6 +48,7 @@ class UserProfileResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    session_id: Optional[str] = None  # For merging anonymous votes
 
 
 class TokenResponse(BaseModel):

@@ -184,11 +184,13 @@ async def get_liked_videos(
     db: AsyncSession = Depends(get_db),
     cursor: Optional[str] = None,
     limit: int = 20,
+    session_id: Optional[str] = None,
 ):
     """
-    Get user's liked videos (if authenticated) or popular/most-liked videos (if unauthenticated)
+    Get user's liked videos
     - Authenticated: videos the user has voted with direction 'like'
-    - Unauthenticated: videos with the most likes (trending/popular)
+    - Unauthenticated with session_id: videos the anonymous user has liked (by session_id)
+    - Unauthenticated without session_id: videos with the most likes (trending/popular)
     """
     
     if current_user:
@@ -259,8 +261,84 @@ async def get_liked_videos(
         # Use Vote.created_at for cursor (when the user liked it)
         next_cursor = rows[-1][2].created_at.isoformat() if rows else None
         has_more = len(rows) == limit
-    else:
-        # Unauthenticated user: show popular/most-liked videos (trending)
+    elif session_id:
+        # Anonymous user with session_id: show their liked videos
+        try:
+            import uuid
+            session_uuid = uuid.UUID(session_id)
+            
+            query = (
+                select(Video, User, Vote)
+                .join(Vote, Video.id == Vote.video_id)
+                .join(User, Video.user_id == User.id)
+                .where(
+                    Vote.session_id == session_uuid,
+                    cast(Vote.direction, String) == "like"
+                )
+                .order_by(Vote.created_at.desc())
+            )
+            
+            if cursor:
+                # Parse cursor (ISO format datetime string)
+                try:
+                    from datetime import datetime
+                    cursor_time = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+                    query = query.where(Vote.created_at < cursor_time)
+                except Exception:
+                    # If cursor parsing fails, ignore it
+                    pass
+            
+            query = query.limit(min(limit, 100))
+            
+            result = await db.execute(query)
+            rows = result.all()
+            
+            videos = []
+            for video, user, vote in rows:
+                # Get stats
+                likes_count = await db.execute(
+                    select(func.count(Vote.id)).where(
+                        Vote.video_id == video.id, cast(Vote.direction, String) == "like"
+                    )
+                )
+                not_likes_count = await db.execute(
+                    select(func.count(Vote.id)).where(
+                        Vote.video_id == video.id, cast(Vote.direction, String) == "not_like"
+                    )
+                )
+                views_count = await db.execute(
+                    select(func.count(View.id)).where(View.video_id == video.id)
+                )
+                
+                videos.append(
+                    VideoResponse(
+                        id=str(video.id),
+                        title=video.title,
+                        description=video.description,
+                        status=video.status.value,
+                        thumbnail=video.thumbnail,
+                        url_mp4=video.url_mp4,
+                        duration_seconds=video.duration_seconds,
+                        error_reason=video.error_reason,
+                        user=UserBasic(id=str(user.id), username=user.username),
+                        stats=VideoStats(
+                            likes=likes_count.scalar() or 0,
+                            not_likes=not_likes_count.scalar() or 0,
+                            views=views_count.scalar() or 0,
+                        ),
+                        created_at=video.created_at,
+                    )
+                )
+            
+            # Use Vote.created_at for cursor (when the anonymous user liked it)
+            next_cursor = rows[-1][2].created_at.isoformat() if rows else None
+            has_more = len(rows) == limit
+        except ValueError:
+            # Invalid session_id, fall through to popular videos
+            session_uuid = None
+    
+    if not current_user and (not session_id or 'session_uuid' not in locals() or not session_uuid):
+        # Unauthenticated user without valid session_id: show popular/most-liked videos (trending)
         # Query videos ordered by number of likes (most liked first)
         subquery = (
             select(

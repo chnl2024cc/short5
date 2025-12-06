@@ -332,10 +332,10 @@ async def upload_video(
 async def vote_on_video(
     video_id: str,
     vote_data: VoteRequest,
-    current_user: User = Depends(get_current_user_required),
+    current_user: Optional[User] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Swipe/vote on a video (Like or Not-Like)"""
+    """Swipe/vote on a video (Like or Not-Like) - supports both authenticated and anonymous votes"""
     # Check if video exists
     result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
@@ -346,100 +346,147 @@ async def vote_on_video(
             detail="Video not found",
         )
     
-    # Check if already voted - allow updating vote direction
-    existing_vote_result = await db.execute(
-        select(Vote).where(
-            Vote.user_id == current_user.id,
-            Vote.video_id == video.id,
-        )
-    )
-    existing_vote = existing_vote_result.scalar_one_or_none()
-    
     # Determine new direction
     new_direction = VoteDirection.LIKE if vote_data.direction == "like" else VoteDirection.NOT_LIKE
     
-    if existing_vote:
-        # User already voted - update the vote direction
-        old_direction = existing_vote.direction
-        existing_vote.direction = new_direction
-        
-        # Handle user_liked_videos based on direction change
-        if old_direction == VoteDirection.LIKE and new_direction == VoteDirection.NOT_LIKE:
-            # Changed from like to not_like - remove from liked videos
-            delete_stmt = delete(UserLikedVideo).where(
-                UserLikedVideo.user_id == current_user.id,
-                UserLikedVideo.video_id == video.id,
+    # Handle authenticated vs anonymous votes
+    if current_user:
+        # Authenticated vote
+        # Check if already voted - allow updating vote direction
+        existing_vote_result = await db.execute(
+            select(Vote).where(
+                Vote.user_id == current_user.id,
+                Vote.video_id == video.id,
             )
-            await db.execute(delete_stmt)
-        elif old_direction == VoteDirection.NOT_LIKE and new_direction == VoteDirection.LIKE:
-            # Changed from not_like to like - add to liked videos (if not already there)
-            existing_liked_result = await db.execute(
-                select(UserLikedVideo).where(
-                    UserLikedVideo.user_id == current_user.id,
-                    UserLikedVideo.video_id == video.id,
-                )
-            )
-            if not existing_liked_result.scalar_one_or_none():
-                liked_video = UserLikedVideo(
-                    user_id=current_user.id,
-                    video_id=video.id,
-                )
-                db.add(liked_video)
-        # If direction is the same, no changes needed
-    else:
-        # Create new vote
-        vote = Vote(
-            user_id=current_user.id,
-            video_id=video.id,
-            direction=new_direction,
         )
-        db.add(vote)
+        existing_vote = existing_vote_result.scalar_one_or_none()
         
-        # If like, add to liked videos (check if already exists first)
-        if new_direction == VoteDirection.LIKE:
-            existing_liked_result = await db.execute(
-                select(UserLikedVideo).where(
+        if existing_vote:
+            # User already voted - update the vote direction
+            old_direction = existing_vote.direction
+            existing_vote.direction = new_direction
+            
+            # Handle user_liked_videos based on direction change
+            if old_direction == VoteDirection.LIKE and new_direction == VoteDirection.NOT_LIKE:
+                # Changed from like to not_like - remove from liked videos
+                delete_stmt = delete(UserLikedVideo).where(
                     UserLikedVideo.user_id == current_user.id,
                     UserLikedVideo.video_id == video.id,
                 )
-            )
-            if not existing_liked_result.scalar_one_or_none():
-                liked_video = UserLikedVideo(
-                    user_id=current_user.id,
-                    video_id=video.id,
+                await db.execute(delete_stmt)
+            elif old_direction == VoteDirection.NOT_LIKE and new_direction == VoteDirection.LIKE:
+                # Changed from not_like to like - add to liked videos (if not already there)
+                existing_liked_result = await db.execute(
+                    select(UserLikedVideo).where(
+                        UserLikedVideo.user_id == current_user.id,
+                        UserLikedVideo.video_id == video.id,
+                    )
                 )
-                db.add(liked_video)
+                if not existing_liked_result.scalar_one_or_none():
+                    liked_video = UserLikedVideo(
+                        user_id=current_user.id,
+                        video_id=video.id,
+                    )
+                    db.add(liked_video)
+            # If direction is the same, no changes needed
+        else:
+            # Create new vote
+            vote = Vote(
+                user_id=current_user.id,
+                video_id=video.id,
+                direction=new_direction,
+                session_id=None,
+            )
+            db.add(vote)
+            
+            # If like, add to liked videos (check if already exists first)
+            if new_direction == VoteDirection.LIKE:
+                existing_liked_result = await db.execute(
+                    select(UserLikedVideo).where(
+                        UserLikedVideo.user_id == current_user.id,
+                        UserLikedVideo.video_id == video.id,
+                    )
+                )
+                if not existing_liked_result.scalar_one_or_none():
+                    liked_video = UserLikedVideo(
+                        user_id=current_user.id,
+                        video_id=video.id,
+                    )
+                    db.add(liked_video)
+    else:
+        # Anonymous vote - require session_id
+        if not vote_data.session_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="session_id is required for anonymous votes",
+            )
+        
+        try:
+            session_uuid = uuid.UUID(vote_data.session_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid session_id format",
+            )
+        
+        # Check if already voted with this session_id
+        existing_vote_result = await db.execute(
+            select(Vote).where(
+                Vote.session_id == session_uuid,
+                Vote.video_id == video.id,
+            )
+        )
+        existing_vote = existing_vote_result.scalar_one_or_none()
+        
+        if existing_vote:
+            # Update existing anonymous vote
+            existing_vote.direction = new_direction
+        else:
+            # Create new anonymous vote
+            vote = Vote(
+                user_id=None,
+                session_id=session_uuid,
+                video_id=video.id,
+                direction=new_direction,
+            )
+            db.add(vote)
     
     try:
         await db.commit()
     except IntegrityError as e:
-        # Handle duplicate key error for user_liked_videos (race condition)
+        # Handle duplicate key errors
         await db.rollback()
-        # Check if it's a duplicate key error for user_liked_videos
         error_str = str(e.orig) if hasattr(e, 'orig') else str(e)
+        
         if "user_liked_videos_user_id_video_id_key" in error_str:
             # This is fine - the entry already exists, just commit the vote update
-            # Re-apply the vote changes
-            if existing_vote:
-                # Re-fetch and update the existing vote
-                existing_vote_result = await db.execute(
-                    select(Vote).where(
-                        Vote.user_id == current_user.id,
-                        Vote.video_id == video.id,
-                    )
-                )
-                existing_vote = existing_vote_result.scalar_one_or_none()
+            # Re-apply the vote changes for authenticated users
+            if current_user:
                 if existing_vote:
-                    existing_vote.direction = new_direction
-            else:
-                # Re-add the new vote
-                vote = Vote(
-                    user_id=current_user.id,
-                    video_id=video.id,
-                    direction=new_direction,
-                )
-                db.add(vote)
-            await db.commit()
+                    # Re-fetch and update the existing vote
+                    existing_vote_result = await db.execute(
+                        select(Vote).where(
+                            Vote.user_id == current_user.id,
+                            Vote.video_id == video.id,
+                        )
+                    )
+                    existing_vote = existing_vote_result.scalar_one_or_none()
+                    if existing_vote:
+                        existing_vote.direction = new_direction
+                else:
+                    # Re-add the new vote
+                    vote = Vote(
+                        user_id=current_user.id,
+                        video_id=video.id,
+                        direction=new_direction,
+                        session_id=None,
+                    )
+                    db.add(vote)
+                await db.commit()
+        elif "idx_votes_session_video_unique" in error_str or "idx_votes_user_video_unique" in error_str:
+            # Duplicate vote - this shouldn't happen if we check first, but handle gracefully
+            # Just return success since the vote already exists
+            pass
         else:
             # Re-raise if it's a different integrity error
             raise

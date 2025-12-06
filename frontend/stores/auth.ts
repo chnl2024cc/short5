@@ -19,11 +19,27 @@ export const useAuthStore = defineStore('auth', {
     async login(email: string, password: string) {
       const api = useApi()
       try {
+        // Get session_id if available (for merging anonymous votes)
+        let sessionId: string | null = null
+        if (process.client) {
+          const { useSession } = await import('~/composables/useSession')
+          const { getSessionId } = useSession()
+          sessionId = getSessionId()
+        }
+        
+        const loginPayload: { email: string; password: string; session_id?: string } = {
+          email,
+          password,
+        }
+        if (sessionId) {
+          loginPayload.session_id = sessionId
+        }
+        
         const response = await api.post<{
           user: any
           access_token: string
           refresh_token: string
-        }>('/auth/login', { email, password })
+        }>('/auth/login', loginPayload)
         
         this.user = response.user
         this.token = response.access_token
@@ -35,11 +51,6 @@ export const useAuthStore = defineStore('auth', {
           localStorage.setItem('refreshToken', response.refresh_token)
           localStorage.setItem('user', JSON.stringify(response.user))
         }
-        
-        // Sync pending votes after login
-        const { useVideosStore } = await import('./videos')
-        const videosStore = useVideosStore()
-        await videosStore.syncPendingVotes()
         
         return response
       } catch (error) {
@@ -51,11 +62,28 @@ export const useAuthStore = defineStore('auth', {
     async register(username: string, email: string, password: string) {
       const api = useApi()
       try {
+        // Get session_id if available (for merging anonymous votes)
+        let sessionId: string | null = null
+        if (process.client) {
+          const { useSession } = await import('~/composables/useSession')
+          const { getSessionId } = useSession()
+          sessionId = getSessionId()
+        }
+        
+        const registerPayload: { username: string; email: string; password: string; session_id?: string } = {
+          username,
+          email,
+          password,
+        }
+        if (sessionId) {
+          registerPayload.session_id = sessionId
+        }
+        
         const response = await api.post<{
           user: any
           access_token: string
           refresh_token: string
-        }>('/auth/register', { username, email, password })
+        }>('/auth/register', registerPayload)
         
         this.user = response.user
         this.token = response.access_token
@@ -67,11 +95,6 @@ export const useAuthStore = defineStore('auth', {
           localStorage.setItem('refreshToken', response.refresh_token)
           localStorage.setItem('user', JSON.stringify(response.user))
         }
-        
-        // Sync pending votes after registration
-        const { useVideosStore } = await import('./videos')
-        const videosStore = useVideosStore()
-        await videosStore.syncPendingVotes()
         
         return response
       } catch (error) {

@@ -36,8 +36,3 @@ export interface FeedResponse {
   has_more: boolean
 }
 
-export interface PendingVote {
-  videoId: string
-  direction: 'like' | 'not_like'
-  timestamp: number
-}

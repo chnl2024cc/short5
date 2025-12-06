@@ -58,6 +58,7 @@ class VideoResponse(VideoBase):
 
 class VoteRequest(BaseModel):
     direction: str = Field(..., pattern="^(like|not_like)$")
+    session_id: Optional[str] = None  # For anonymous votes
 
 
 class VoteResponse(BaseModel):

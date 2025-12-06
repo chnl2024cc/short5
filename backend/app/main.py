@@ -157,6 +157,65 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"Could not verify/add video_metadata_json column: {e}")
             # Don't fail startup if migration fails
+        
+        # Migrate votes table to support anonymous votes
+        try:
+            async with AsyncSessionLocal() as db:
+                # Check if session_id column exists
+                result = await db.execute(text("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'votes' 
+                        AND column_name = 'session_id'
+                    )
+                """))
+                if not result.scalar():
+                    logger.info("Migrating votes table to support anonymous votes...")
+                    
+                    # Drop old unique constraint if it exists
+                    try:
+                        await db.execute(text("ALTER TABLE votes DROP CONSTRAINT IF EXISTS votes_user_id_video_id_key;"))
+                    except Exception:
+                        pass  # Constraint might not exist
+                    
+                    # Make user_id nullable
+                    await db.execute(text("ALTER TABLE votes ALTER COLUMN user_id DROP NOT NULL;"))
+                    
+                    # Add session_id column
+                    await db.execute(text("ALTER TABLE votes ADD COLUMN session_id UUID;"))
+                    
+                    # Add check constraint
+                    await db.execute(text("""
+                        ALTER TABLE votes ADD CONSTRAINT check_user_or_session 
+                        CHECK ((user_id IS NOT NULL AND session_id IS NULL) OR (user_id IS NULL AND session_id IS NOT NULL));
+                    """))
+                    
+                    # Create partial unique indexes
+                    # For authenticated votes: unique on (user_id, video_id)
+                    await db.execute(text("""
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_votes_user_video_unique 
+                        ON votes (user_id, video_id) 
+                        WHERE user_id IS NOT NULL;
+                    """))
+                    
+                    # For anonymous votes: unique on (session_id, video_id)
+                    await db.execute(text("""
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_votes_session_video_unique 
+                        ON votes (session_id, video_id) 
+                        WHERE session_id IS NOT NULL;
+                    """))
+                    
+                    # Add index on session_id
+                    await db.execute(text("CREATE INDEX IF NOT EXISTS idx_votes_session_id ON votes(session_id);"))
+                    
+                    await db.commit()
+                    logger.info("✓ votes table migration completed successfully")
+                else:
+                    logger.info("✓ votes table already migrated")
+        except Exception as e:
+            logger.warning(f"Could not migrate votes table: {e}", exc_info=True)
+            # Don't fail startup if migration fails
             
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}", exc_info=True)
