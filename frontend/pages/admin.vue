@@ -148,6 +148,204 @@
           </details>
         </div>
 
+        <!-- Share Analytics Tab -->
+        <div v-else-if="activeTab === 'shareAnalytics'" class="space-y-6">
+          <div class="flex items-center justify-between flex-wrap gap-4">
+            <h2 class="text-xl font-bold">Share Analytics</h2>
+            <div class="flex items-center gap-4">
+              <select
+                v-model="shareAnalyticsPeriod"
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="day">Daily</option>
+                <option value="week">Weekly</option>
+              </select>
+              <select
+                v-model="shareAnalyticsDays"
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option :value="7">Last 7 days</option>
+                <option :value="14">Last 14 days</option>
+                <option :value="30">Last 30 days</option>
+                <option :value="60">Last 60 days</option>
+                <option :value="90">Last 90 days</option>
+              </select>
+              <button
+                @click="loadShareAnalytics"
+                :disabled="shareAnalyticsLoading"
+                class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                {{ shareAnalyticsLoading ? 'Loading...' : 'Refresh' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="shareAnalyticsLoading && !shareAnalyticsData" class="text-center py-8 text-gray-400">
+            Loading share analytics...
+          </div>
+
+          <!-- Summary Cards -->
+          <div v-if="shareAnalyticsData" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Total Shares</div>
+              <div class="text-2xl font-bold">{{ shareAnalyticsData.summary?.total_shares?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Total Clicks</div>
+              <div class="text-2xl font-bold">{{ shareAnalyticsData.summary?.total_clicks?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Unique Clickers</div>
+              <div class="text-2xl font-bold">{{ shareAnalyticsData.summary?.unique_clickers?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Shares with Clicks</div>
+              <div class="text-2xl font-bold">{{ shareAnalyticsData.summary?.shares_with_clicks?.toLocaleString() || 0 }}</div>
+            </div>
+          </div>
+
+          <!-- Metrics Cards -->
+          <div v-if="shareAnalyticsData" class="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Click-Through Rate</div>
+              <div class="text-2xl font-bold text-blue-400">{{ shareAnalyticsData.metrics?.click_through_rate || 0 }}%</div>
+              <div class="text-xs text-gray-500 mt-1">Clicks per 100 shares</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Avg Clicks/Share</div>
+              <div class="text-2xl font-bold">{{ shareAnalyticsData.metrics?.avg_clicks_per_share || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Conversion Rate</div>
+              <div class="text-2xl font-bold text-green-400">{{ shareAnalyticsData.metrics?.share_conversion_rate || 0 }}%</div>
+              <div class="text-xs text-gray-500 mt-1">Shares that got clicks</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Avg Clicks/Clicker</div>
+              <div class="text-2xl font-bold">{{ shareAnalyticsData.metrics?.avg_clicks_per_clicker || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Time to First Click</div>
+              <div class="text-2xl font-bold">{{ shareAnalyticsData.metrics?.avg_time_to_first_click_hours || 0 }}h</div>
+            </div>
+          </div>
+
+          <!-- Time Series Charts -->
+          <div v-if="shareAnalyticsData && shareAnalyticsData.over_time" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <!-- Shares Over Time -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Shares Over Time</h3>
+              <div class="space-y-2 max-h-64 overflow-y-auto">
+                <div
+                  v-for="item in shareAnalyticsData.over_time.shares"
+                  :key="item.date"
+                  class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+                >
+                  <span class="text-sm text-gray-300">{{ formatAnalyticsDate(item.date, shareAnalyticsPeriod) }}</span>
+                  <span class="text-sm font-bold text-blue-400">{{ item.shares || 0 }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Clicks Over Time -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Clicks Over Time</h3>
+              <div class="space-y-2 max-h-64 overflow-y-auto">
+                <div
+                  v-for="item in shareAnalyticsData.over_time.clicks"
+                  :key="item.date"
+                  class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+                >
+                  <span class="text-sm text-gray-300">{{ formatAnalyticsDate(item.date, shareAnalyticsPeriod) }}</span>
+                  <span class="text-sm font-bold text-green-400">{{ item.clicks || 0 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Videos -->
+          <div v-if="shareAnalyticsData && shareAnalyticsData.top_videos" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <!-- Most Shared Videos -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Most Shared Videos</h3>
+              <div v-if="shareAnalyticsData.top_videos.most_shared && shareAnalyticsData.top_videos.most_shared.length > 0" class="space-y-3">
+                <div
+                  v-for="(video, index) in shareAnalyticsData.top_videos.most_shared"
+                  :key="video.video_id"
+                  class="p-3 bg-gray-800 rounded hover:bg-gray-700 transition-colors"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-gray-500 text-xs font-bold">#{{ index + 1 }}</span>
+                        <span class="text-white text-sm font-medium truncate">{{ video.title || 'Untitled' }}</span>
+                      </div>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                      <div class="text-sm font-bold text-blue-400">{{ video.share_count || 0 }}</div>
+                      <div class="text-xs text-gray-500">shares</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-gray-400 text-center py-4 text-sm">No shared videos in this period</div>
+            </div>
+
+            <!-- Most Clicked Videos -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Most Clicked Videos</h3>
+              <div v-if="shareAnalyticsData.top_videos.most_clicked && shareAnalyticsData.top_videos.most_clicked.length > 0" class="space-y-3">
+                <div
+                  v-for="(video, index) in shareAnalyticsData.top_videos.most_clicked"
+                  :key="video.video_id"
+                  class="p-3 bg-gray-800 rounded hover:bg-gray-700 transition-colors"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-gray-500 text-xs font-bold">#{{ index + 1 }}</span>
+                        <span class="text-white text-sm font-medium truncate">{{ video.title || 'Untitled' }}</span>
+                      </div>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                      <div class="text-sm font-bold text-green-400">{{ video.click_count || 0 }}</div>
+                      <div class="text-xs text-gray-500">clicks</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-gray-400 text-center py-4 text-sm">No clicked videos in this period</div>
+            </div>
+          </div>
+
+          <!-- Top Sharers -->
+          <div v-if="shareAnalyticsData && shareAnalyticsData.top_sharers" class="bg-gray-900 rounded-lg p-6 mt-6">
+            <h3 class="text-lg font-bold mb-4">Top Sharers</h3>
+            <div v-if="shareAnalyticsData.top_sharers && shareAnalyticsData.top_sharers.length > 0" class="space-y-2">
+              <div
+                v-for="(sharer, index) in shareAnalyticsData.top_sharers"
+                :key="sharer.sharer_session_id"
+                class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-gray-500 text-sm w-6">#{{ index + 1 }}</span>
+                  <span class="text-white text-sm font-mono">{{ sharer.sharer_session_id.substring(0, 8) }}...</span>
+                </div>
+                <span class="text-gray-400 text-sm">{{ sharer.share_count }} shares</span>
+              </div>
+            </div>
+            <div v-else class="text-gray-400 text-center py-4 text-sm">No sharers in this period</div>
+          </div>
+
+          <!-- Empty State -->
+          <div v-else-if="!shareAnalyticsLoading && shareAnalyticsData && (!shareAnalyticsData.summary || shareAnalyticsData.summary.total_shares === 0)" class="bg-gray-900 rounded-lg p-12 text-center">
+            <div class="text-6xl mb-4">📤</div>
+            <h4 class="text-xl font-bold mb-2">No Share Data</h4>
+            <p class="text-gray-400">No share analytics data available for the selected period.</p>
+          </div>
+        </div>
+
         <!-- Analytics Tab -->
         <div v-else-if="activeTab === 'analytics'" class="space-y-6">
           <div class="flex items-center justify-between flex-wrap gap-4">
@@ -207,6 +405,65 @@
             </div>
           </div>
 
+          <!-- Daily Share & Click Overview -->
+          <div v-if="analyticsData && analytics.length > 0 && analyticsData.totals?.shares !== undefined" class="bg-gray-900 rounded-lg p-6 mt-6">
+            <h3 class="text-lg font-bold mb-4">Daily Share & Click Overview</h3>
+            <p class="text-sm text-gray-400 mb-4">Overview of shares created and links opened per day</p>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-gray-800">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Shares Created</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Links Opened (Clicks)</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">CTR</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Clicks/Share</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                  <tr 
+                    v-for="item in analytics" 
+                    :key="item.date" 
+                    class="hover:bg-gray-800"
+                  >
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
+                      {{ formatAnalyticsDate(item.date) }}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-right">
+                      <span class="font-semibold text-blue-400">{{ (item.shares || 0).toLocaleString() }}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-right">
+                      <span class="font-semibold text-green-400">{{ (item.share_clicks || 0).toLocaleString() }}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-300">
+                      {{ item.shares ? ((item.share_clicks || 0) / item.shares * 100).toFixed(1) : 0 }}%
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-300">
+                      {{ item.shares ? ((item.share_clicks || 0) / item.shares).toFixed(2) : '0.00' }}
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot v-if="analyticsData.totals" class="bg-gray-800">
+                  <tr>
+                    <td class="px-4 py-3 text-sm font-bold text-gray-200">Total</td>
+                    <td class="px-4 py-3 text-sm text-right font-bold text-blue-400">
+                      {{ (analyticsData.totals.shares || 0).toLocaleString() }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-right font-bold text-green-400">
+                      {{ (analyticsData.totals.share_clicks || 0).toLocaleString() }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-right font-bold text-gray-200">
+                      {{ analyticsData.share_metrics?.click_through_rate || 0 }}%
+                    </td>
+                    <td class="px-4 py-3 text-sm text-right font-bold text-gray-200">
+                      {{ analyticsData.totals.shares ? (analyticsData.totals.share_clicks / analyticsData.totals.shares).toFixed(2) : '0.00' }}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
           <!-- Analytics Table -->
           <div v-if="analyticsData && analytics.length > 0" class="bg-gray-900 rounded-lg overflow-hidden">
             <div class="overflow-x-auto">
@@ -218,6 +475,8 @@
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Likes</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Videos</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Users</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Shares</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Clicks</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-800">
@@ -236,6 +495,12 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-300">
                       {{ item.users?.toLocaleString() || 0 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-300">
+                      {{ item.shares?.toLocaleString() || 0 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-300">
+                      {{ item.share_clicks?.toLocaleString() || 0 }}
                     </td>
                   </tr>
                 </tbody>
@@ -1015,6 +1280,7 @@ const isAdmin = computed(() => {
 const tabs = [
   { id: 'stats', label: t('admin.tabs.overview') || 'Overview' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'shareAnalytics', label: 'Share Analytics' },
   { id: 'videos', label: t('admin.tabs.pendingVideos') || 'Pending Videos' },
   { id: 'allVideos', label: t('admin.tabs.allVideos') || 'All Videos' },
   { id: 'users', label: t('admin.tabs.users') || 'Users' },
@@ -1058,6 +1324,13 @@ const analyticsPeriod = ref<'day' | 'week'>('day')
 const analyticsDays = ref(30)
 const analyticsData = ref<any | null>(null)
 
+// Share Analytics
+const shareAnalytics = ref<any[]>([])
+const shareAnalyticsLoading = ref(false)
+const shareAnalyticsPeriod = ref<'day' | 'week'>('week')
+const shareAnalyticsDays = ref(30)
+const shareAnalyticsData = ref<any | null>(null)
+
 // Reports
 const reports = ref<any[]>([])
 const reportsLoading = ref(false)
@@ -1082,9 +1355,10 @@ const formatDate = (dateString: string): string => {
   })
 }
 
-const formatAnalyticsDate = (dateString: string): string => {
+const formatAnalyticsDate = (dateString: string, period?: 'day' | 'week'): string => {
   const date = new Date(dateString)
-  if (analyticsPeriod.value === 'week') {
+  const usePeriod = period || analyticsPeriod.value
+  if (usePeriod === 'week') {
     // For weeks, show the start of the week
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -1125,16 +1399,25 @@ const loadAnalytics = async () => {
         likes: number
         videos: number
         users: number
+        shares?: number
+        share_clicks?: number
       }>
       totals: {
         views: number
         likes: number
         new_videos: number
         new_users: number
+        shares?: number
+        share_clicks?: number
       }
       averages: {
         views_per_period: number
         likes_per_period: number
+        shares_per_period?: number
+        share_clicks_per_period?: number
+      }
+      share_metrics?: {
+        click_through_rate: number
       }
       top_videos_by_views?: Array<{
         id: string
@@ -1170,6 +1453,45 @@ const loadAnalytics = async () => {
     error.value = err.message || 'Failed to load analytics'
   } finally {
     analyticsLoading.value = false
+  }
+}
+
+const loadShareAnalytics = async () => {
+  shareAnalyticsLoading.value = true
+  try {
+    const response = await api.get<{
+      period: string
+      days: number
+      video_id?: string
+      summary: {
+        total_shares: number
+        total_clicks: number
+        unique_clickers: number
+        shares_with_clicks: number
+      }
+      metrics: {
+        click_through_rate: number
+        avg_clicks_per_share: number
+        share_conversion_rate: number
+        avg_clicks_per_clicker: number
+        avg_time_to_first_click_hours: number
+      }
+      over_time: {
+        shares: Array<{ date: string; shares: number }>
+        clicks: Array<{ date: string; clicks: number }>
+      }
+      top_videos: {
+        most_shared: Array<{ video_id: string; title: string; share_count: number }>
+        most_clicked: Array<{ video_id: string; title: string; click_count: number }>
+      }
+      top_sharers: Array<{ sharer_session_id: string; share_count: number }>
+    }>(`/admin/shares/analytics?period=${shareAnalyticsPeriod.value}&days=${shareAnalyticsDays.value}`)
+    shareAnalyticsData.value = response
+  } catch (err: any) {
+    console.error('Failed to load share analytics:', err)
+    error.value = err.message || 'Failed to load share analytics'
+  } finally {
+    shareAnalyticsLoading.value = false
   }
 }
 
@@ -1474,6 +1796,8 @@ watch(activeTab, (newTab) => {
     loadStats()
   } else if (newTab === 'analytics') {
     loadAnalytics()
+  } else if (newTab === 'shareAnalytics') {
+    loadShareAnalytics()
   } else if (newTab === 'videos') {
     loadPendingVideos()
   } else if (newTab === 'allVideos') {
@@ -1488,6 +1812,12 @@ watch(activeTab, (newTab) => {
 watch([analyticsPeriod, analyticsDays], () => {
   if (activeTab.value === 'analytics') {
     loadAnalytics()
+  }
+})
+
+watch([shareAnalyticsPeriod, shareAnalyticsDays], () => {
+  if (activeTab.value === 'shareAnalytics') {
+    loadShareAnalytics()
   }
 })
 

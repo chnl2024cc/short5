@@ -14,6 +14,8 @@ from app.models.video import Video, VideoStatus
 from app.models.report import Report, ReportType, ReportStatus
 from app.models.vote import Vote, VoteDirection
 from app.models.view import View
+from app.models.share import ShareLink
+from app.models.share_click import ShareClick
 from app.schemas.video import VideoResponse, UserBasic, VideoStats
 
 router = APIRouter()
@@ -564,6 +566,34 @@ async def get_analytics(
     users_result = await db.execute(users_query)
     users_data = users_result.all()
     
+    # Get shares per period
+    shares_date_trunc = sql_func.date_trunc('day' if period == 'day' else 'week', ShareLink.created_at).label('date')
+    shares_query = (
+        select(
+            shares_date_trunc,
+            func.count(ShareLink.id).label('count')
+        )
+        .where(ShareLink.created_at >= start_date)
+        .group_by(shares_date_trunc)
+        .order_by(shares_date_trunc)
+    )
+    shares_result = await db.execute(shares_query)
+    shares_data = shares_result.all()
+    
+    # Get clicks per period
+    clicks_date_trunc = sql_func.date_trunc('day' if period == 'day' else 'week', ShareClick.clicked_at).label('date')
+    clicks_query = (
+        select(
+            clicks_date_trunc,
+            func.count(ShareClick.id).label('count')
+        )
+        .where(ShareClick.clicked_at >= start_date)
+        .group_by(clicks_date_trunc)
+        .order_by(clicks_date_trunc)
+    )
+    clicks_result = await db.execute(clicks_query)
+    clicks_data = clicks_result.all()
+    
     # Format dates and combine data
     analytics = []
     all_dates = set()
@@ -578,6 +608,12 @@ async def get_analytics(
         date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
         all_dates.add(date_str)
     for row in users_data:
+        date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+        all_dates.add(date_str)
+    for row in shares_data:
+        date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+        all_dates.add(date_str)
+    for row in clicks_data:
         date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
         all_dates.add(date_str)
     
@@ -602,6 +638,16 @@ async def get_analytics(
         date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
         users_dict[date_str] = row.count
     
+    shares_dict = {}
+    for row in shares_data:
+        date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+        shares_dict[date_str] = row.count
+    
+    clicks_dict = {}
+    for row in clicks_data:
+        date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+        clicks_dict[date_str] = row.count
+    
     # Combine into sorted list
     for date_str in sorted(all_dates):
         analytics.append({
@@ -610,6 +656,8 @@ async def get_analytics(
             "likes": likes_dict.get(date_str, 0),
             "videos": videos_dict.get(date_str, 0),
             "users": users_dict.get(date_str, 0),
+            "shares": shares_dict.get(date_str, 0),
+            "share_clicks": clicks_dict.get(date_str, 0),
         })
     
     # Calculate totals and averages
@@ -617,9 +665,16 @@ async def get_analytics(
     total_likes = sum(item["likes"] for item in analytics)
     total_new_videos = sum(item["videos"] for item in analytics)
     total_new_users = sum(item["users"] for item in analytics)
+    total_shares = sum(item["shares"] for item in analytics)
+    total_share_clicks = sum(item["share_clicks"] for item in analytics)
     
     avg_views_per_period = total_views / len(analytics) if analytics else 0
     avg_likes_per_period = total_likes / len(analytics) if analytics else 0
+    avg_shares_per_period = total_shares / len(analytics) if analytics else 0
+    avg_clicks_per_period = total_share_clicks / len(analytics) if analytics else 0
+    
+    # Calculate share click-through rate
+    share_ctr = (total_share_clicks / total_shares * 100) if total_shares > 0 else 0
     
     # Get top videos by views
     top_views_subquery = (
@@ -760,10 +815,17 @@ async def get_analytics(
             "likes": total_likes,
             "new_videos": total_new_videos,
             "new_users": total_new_users,
+            "shares": total_shares,
+            "share_clicks": total_share_clicks,
         },
         "averages": {
             "views_per_period": round(avg_views_per_period, 2),
             "likes_per_period": round(avg_likes_per_period, 2),
+            "shares_per_period": round(avg_shares_per_period, 2),
+            "share_clicks_per_period": round(avg_clicks_per_period, 2),
+        },
+        "share_metrics": {
+            "click_through_rate": round(share_ctr, 2),
         },
         "top_videos_by_views": top_videos_by_views,
         "top_videos_by_likes": top_videos_by_likes,
