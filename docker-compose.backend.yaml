@@ -58,8 +58,10 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       # CORS origins - should include frontend URL
       CORS_ORIGINS: ${FRONTEND_BASE_URL}
+      GEOIP_DB_PATH: ${GEOIP_DB_PATH:-/app/geodata/dbip-city-lite-2025-12.mmdb}
     volumes:
       - backend_uploads:/app/uploads
+      - ./geodata:/app/geodata:ro
     depends_on:
       postgres:
         condition: service_healthy
