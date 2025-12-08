@@ -129,19 +129,41 @@ class GeoIPService:
         try:
             response = self.reader.city(ip_address)
             
+            # Log raw response for debugging (only for specific IPs or when no data)
+            debug_ip = ip_address  # Can be set to specific IP for debugging
+            
             # Extract country data (safe attribute access)
             if hasattr(response, 'country') and response.country:
                 result['country'] = getattr(response.country, 'iso_code', None)
                 result['country_name'] = getattr(response.country, 'name', None)
+            elif hasattr(response, 'country'):
+                # Country object exists but might be None or empty
+                country_obj = getattr(response, 'country', None)
+                if country_obj is not None:
+                    # Try alternative attribute names (DB-IP might use different structure)
+                    result['country'] = getattr(country_obj, 'iso_code', None) or getattr(country_obj, 'code', None)
+                    result['country_name'] = getattr(country_obj, 'name', None) or getattr(country_obj, 'names', {}).get('en', None) if hasattr(country_obj, 'names') else None
             
             # Extract city data (safe attribute access)
             if hasattr(response, 'city') and response.city:
-                result['city'] = getattr(response.city, 'name', None)
+                city_obj = response.city
+                result['city'] = getattr(city_obj, 'name', None)
+                # Try alternative attribute names for DB-IP
+                if not result['city'] and hasattr(city_obj, 'names'):
+                    names = getattr(city_obj, 'names', {})
+                    if isinstance(names, dict):
+                        result['city'] = names.get('en', None) or names.get('name', None)
+            elif hasattr(response, 'city'):
+                # City object exists but might be None or empty
+                city_obj = getattr(response, 'city', None)
+                if city_obj is not None:
+                    result['city'] = getattr(city_obj, 'name', None) or (getattr(city_obj, 'names', {}).get('en', None) if hasattr(city_obj, 'names') and isinstance(getattr(city_obj, 'names'), dict) else None)
             
             # Extract coordinates (safe attribute access)
             if hasattr(response, 'location') and response.location:
-                lat = getattr(response.location, 'latitude', None)
-                lon = getattr(response.location, 'longitude', None)
+                location_obj = response.location
+                lat = getattr(location_obj, 'latitude', None)
+                lon = getattr(location_obj, 'longitude', None)
                 if lat is not None and lon is not None:
                     try:
                         result['latitude'] = float(lat)
@@ -150,13 +172,37 @@ class GeoIPService:
                         pass
             
             # Log lookup result
-            if result['country'] or result['city']:
+            # Accept result if we have ANY data (country, city, or coordinates)
+            has_any_data = result['country'] or result['city'] or (result['latitude'] and result['longitude'])
+            
+            if has_any_data:
                 logger.info(f"GeoIP lookup successful for {ip_address}: country={result['country']}, city={result['city']}, coords=({result['latitude']}, {result['longitude']})")
             else:
-                # IP found in database but no data available - set Alaska default
+                # IP found in database but no data available
+                # Log detailed debug info before setting defaults
+                logger.warning(f"GeoIP lookup for {ip_address} found IP in database but returned no country/city data. "
+                             f"Response type: {type(response)}, has country: {hasattr(response, 'country')}, "
+                             f"has city: {hasattr(response, 'city')}, has location: {hasattr(response, 'location')}")
+                
+                # Try to inspect response structure for debugging
+                try:
+                    if hasattr(response, 'country'):
+                        country_obj = getattr(response, 'country', None)
+                        logger.debug(f"  Country object: {country_obj}, type: {type(country_obj) if country_obj else 'None'}")
+                        if country_obj:
+                            logger.debug(f"  Country attributes: {[a for a in dir(country_obj) if not a.startswith('_')]}")
+                    if hasattr(response, 'city'):
+                        city_obj = getattr(response, 'city', None)
+                        logger.debug(f"  City object: {city_obj}, type: {type(city_obj) if city_obj else 'None'}")
+                        if city_obj:
+                            logger.debug(f"  City attributes: {[a for a in dir(city_obj) if not a.startswith('_')]}")
+                except Exception as debug_e:
+                    logger.debug(f"  Could not inspect response structure: {debug_e}")
+                
+                # Set Alaska default
                 alaska_default = self._get_alaska_default()
                 result.update(alaska_default)
-                logger.debug(f"GeoIP lookup returned no data for {ip_address} - setting Alaska default location")
+                logger.debug(f"Setting Alaska default location for {ip_address}")
                 
         except geoip2.errors.AddressNotFoundError:
             # IP not in database - set Alaska default
