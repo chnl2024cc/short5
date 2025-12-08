@@ -346,6 +346,162 @@
           </div>
         </div>
 
+        <!-- Visitor Analytics Tab -->
+        <div v-else-if="activeTab === 'visitorAnalytics'" class="space-y-6">
+          <div class="flex items-center justify-between flex-wrap gap-4">
+            <h2 class="text-xl font-bold">Visitor Analytics</h2>
+            <div class="flex items-center gap-4">
+              <select
+                v-model="visitorAnalyticsDays"
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700"
+              >
+                <option :value="7">Last 7 days</option>
+                <option :value="14">Last 14 days</option>
+                <option :value="30">Last 30 days</option>
+                <option :value="60">Last 60 days</option>
+                <option :value="90">Last 90 days</option>
+              </select>
+              <button
+                @click="loadVisitorAnalytics"
+                :disabled="visitorAnalyticsLoading"
+                class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                {{ visitorAnalyticsLoading ? 'Loading...' : 'Refresh' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="visitorAnalyticsLoading && !visitorAnalyticsData" class="text-center py-8 text-gray-400">
+            Loading visitor analytics...
+          </div>
+
+          <!-- Summary Cards -->
+          <div v-if="visitorAnalyticsData" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Total Visits</div>
+              <div class="text-2xl font-bold">{{ visitorAnalyticsData.total_visits?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Unique Visitors</div>
+              <div class="text-2xl font-bold">{{ visitorAnalyticsData.unique_visitors?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Countries</div>
+              <div class="text-2xl font-bold">{{ visitorAnalyticsData.unique_countries || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Locations Tracked</div>
+              <div class="text-2xl font-bold">{{ visitorLocations?.length || 0 }}</div>
+            </div>
+          </div>
+
+          <!-- Map Visualization -->
+          <div v-if="visitorLocations && visitorLocations.length > 0" class="bg-gray-900 rounded-lg p-6">
+            <h3 class="text-lg font-bold mb-4">Visitor Locations Map</h3>
+            <VisitorMap :locations="visitorLocations" />
+          </div>
+
+          <!-- Top Countries -->
+          <div v-if="visitorAnalyticsData?.top_countries" class="bg-gray-900 rounded-lg p-6">
+            <h3 class="text-lg font-bold mb-4">Top Countries</h3>
+            <div class="space-y-2">
+              <div
+                v-for="(country, index) in visitorAnalyticsData.top_countries"
+                :key="country.country"
+                class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-gray-500 text-sm w-6">#{{ index + 1 }}</span>
+                  <span class="text-white">{{ country.country_name || country.country }}</span>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm font-bold">{{ country.visits.toLocaleString() }} visits</div>
+                  <div class="text-xs text-gray-500">{{ country.visitors }} visitors</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Cities -->
+          <div v-if="visitorAnalyticsData?.top_cities" class="bg-gray-900 rounded-lg p-6">
+            <h3 class="text-lg font-bold mb-4">Top Cities</h3>
+            <div class="space-y-2">
+              <div
+                v-for="(city, index) in visitorAnalyticsData.top_cities"
+                :key="`${city.city}-${city.country}`"
+                class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-gray-500 text-sm w-6">#{{ index + 1 }}</span>
+                  <span class="text-white">{{ city.city }}, {{ city.country_name || city.country }}</span>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm font-bold">{{ city.visits.toLocaleString() }} visits</div>
+                  <div class="text-xs text-gray-500">{{ city.visitors }} visitors</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top URLs -->
+          <div v-if="visitorAnalyticsData?.top_urls" class="bg-gray-900 rounded-lg p-6">
+            <h3 class="text-lg font-bold mb-4">Most Visited URLs</h3>
+            <div class="space-y-2">
+              <div
+                v-for="(url, index) in visitorAnalyticsData.top_urls"
+                :key="url.url"
+                class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+              >
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                  <span class="text-gray-500 text-sm w-6">#{{ index + 1 }}</span>
+                  <span class="text-white text-sm truncate">{{ url.url }}</span>
+                </div>
+                <div class="text-right flex-shrink-0 ml-4">
+                  <div class="text-sm font-bold">{{ url.visits.toLocaleString() }} visits</div>
+                  <div class="text-xs text-gray-500">{{ url.visitors }} visitors</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Visits Table -->
+          <div v-if="recentVisits && recentVisits.length > 0" class="bg-gray-900 rounded-lg overflow-hidden">
+            <h3 class="text-lg font-bold mb-4 p-6 pb-0">Recent Visits</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-gray-800">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Time</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">URL</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Location</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">User</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                  <tr v-for="visit in recentVisits" :key="visit.id" class="hover:bg-gray-800">
+                    <td class="px-4 py-3 text-sm text-gray-300">
+                      {{ formatDate(visit.visited_at) }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-300 truncate max-w-xs">
+                      {{ visit.url }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-300">
+                      <div v-if="visit.city || visit.country_name">
+                        {{ visit.city }}{{ visit.city && visit.country_name ? ', ' : '' }}{{ visit.country_name }}
+                      </div>
+                      <div v-else class="text-gray-500">Unknown</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-300">
+                      {{ visit.user_id ? 'Authenticated' : 'Anonymous' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- Analytics Tab -->
         <div v-else-if="activeTab === 'analytics'" class="space-y-6">
           <div class="flex items-center justify-between flex-wrap gap-4">
@@ -1237,7 +1393,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
 import { useI18n } from '~/composables/useI18n'
@@ -1245,6 +1401,10 @@ import { useI18n } from '~/composables/useI18n'
 definePageMeta({
   middleware: 'admin',
 })
+
+// Lazy-load VisitorMap component (only loads when Visitor Analytics tab is active)
+// This ensures Leaflet library is NOT bundled in the main app bundle
+const VisitorMap = defineAsyncComponent(() => import('~/components/VisitorMap.vue'))
 
 const authStore = useAuthStore()
 const api = useApi()
@@ -1281,6 +1441,7 @@ const tabs = [
   { id: 'stats', label: t('admin.tabs.overview') || 'Overview' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'shareAnalytics', label: 'Share Analytics' },
+  { id: 'visitorAnalytics', label: 'Visitor Analytics' },
   { id: 'videos', label: t('admin.tabs.pendingVideos') || 'Pending Videos' },
   { id: 'allVideos', label: t('admin.tabs.allVideos') || 'All Videos' },
   { id: 'users', label: t('admin.tabs.users') || 'Users' },
@@ -1330,6 +1491,13 @@ const shareAnalyticsLoading = ref(false)
 const shareAnalyticsPeriod = ref<'day' | 'week'>('week')
 const shareAnalyticsDays = ref(30)
 const shareAnalyticsData = ref<any | null>(null)
+
+// Visitor Analytics
+const visitorAnalyticsData = ref<any | null>(null)
+const visitorLocations = ref<any[]>([])
+const recentVisits = ref<any[]>([])
+const visitorAnalyticsLoading = ref(false)
+const visitorAnalyticsDays = ref(30)
 
 // Reports
 const reports = ref<any[]>([])
@@ -1492,6 +1660,28 @@ const loadShareAnalytics = async () => {
     error.value = err.message || 'Failed to load share analytics'
   } finally {
     shareAnalyticsLoading.value = false
+  }
+}
+
+const loadVisitorAnalytics = async () => {
+  visitorAnalyticsLoading.value = true
+  try {
+    // Load stats
+    const statsResponse = await api.get(`/admin/visitors/stats?days=${visitorAnalyticsDays.value}`)
+    visitorAnalyticsData.value = statsResponse
+    
+    // Load locations for map
+    const locationsResponse = await api.get(`/admin/visitors/locations?days=${visitorAnalyticsDays.value}`)
+    visitorLocations.value = locationsResponse
+    
+    // Load recent visits
+    const recentResponse = await api.get('/admin/visitors/recent?limit=50')
+    recentVisits.value = recentResponse
+  } catch (err: any) {
+    console.error('Failed to load visitor analytics:', err)
+    error.value = err.message || 'Failed to load visitor analytics'
+  } finally {
+    visitorAnalyticsLoading.value = false
   }
 }
 
@@ -1798,6 +1988,8 @@ watch(activeTab, (newTab) => {
     loadAnalytics()
   } else if (newTab === 'shareAnalytics') {
     loadShareAnalytics()
+  } else if (newTab === 'visitorAnalytics') {
+    loadVisitorAnalytics()
   } else if (newTab === 'videos') {
     loadPendingVideos()
   } else if (newTab === 'allVideos') {

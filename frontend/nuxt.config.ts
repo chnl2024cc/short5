@@ -71,6 +71,14 @@ export default defineNuxtConfig({
   vite: {
     build: {
       sourcemap: !isProduction,
+      rollupOptions: {
+        output: {
+          // Code-split admin components (VisitorMap, Leaflet) into separate chunks
+          manualChunks: {
+            'admin-analytics': ['./components/VisitorMap.vue'],
+          },
+        },
+      },
     },
     // Explicitly disable devtools-related plugins in production
     ...(isProduction && {
@@ -78,6 +86,11 @@ export default defineNuxtConfig({
         hmr: false,
       },
     }),
+  },
+  
+  // Optimize chunk splitting - ensure admin components are not in main bundle
+  experimental: {
+    payloadExtraction: true,
   },
 })
 

@@ -36,6 +36,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Visitor Tracking Middleware (MVP - Simple async tracking)
+@app.middleware("http")
+async def track_visitors_middleware(request: Request, call_next):
+    """
+    Track visitor visits in background (non-blocking)
+    Only tracks GET requests to frontend pages (not API calls)
+    """
+    response = await call_next(request)
+    
+    # Only track GET requests to frontend routes (skip API routes)
+    if request.method == "GET" and not request.url.path.startswith("/api/"):
+        # Track in background (fire and forget)
+        import asyncio
+        from app.core.database import AsyncSessionLocal
+        from app.services.visitor_tracking import get_tracking_service
+        from app.core.security import decode_token
+        from app.models.user import User
+        from sqlalchemy import select
+        
+        async def track_visit_async():
+            """Async tracking function"""
+            try:
+                async with AsyncSessionLocal() as db:
+                    # Try to get user if authenticated (non-blocking check)
+                    user_id = None
+                    try:
+                        # Check for auth token in headers
+                        auth_header = request.headers.get("authorization", "")
+                        if auth_header.startswith("Bearer "):
+                            token = auth_header.split(" ")[1]
+                            payload = decode_token(token)
+                            if payload and payload.get("type") == "access":
+                                user_id_str = payload.get("sub")
+                                if user_id_str:
+                                    result = await db.execute(
+                                        select(User).where(User.id == user_id_str)
+                                    )
+                                    user = result.scalar_one_or_none()
+                                    if user and user.is_active:
+                                        user_id = user.id
+                    except:
+                        pass  # Ignore auth errors for tracking
+                    
+                    tracking_service = get_tracking_service()
+                    await tracking_service.track_visit(request, db, user_id)
+            except Exception as e:
+                logger.debug(f"Background tracking failed: {e}")  # Don't log errors for tracking failures
+        
+        # Fire and forget
+        asyncio.create_task(track_visit_async())
+    
+    return response
+
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
 

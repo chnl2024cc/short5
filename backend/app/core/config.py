@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     
+    # GeoIP (Visitor Analytics)
+    GEOIP_DB_PATH: str | None = None  # Path to MaxMind GeoLite2-City.mmdb file
+    
     # Environment
     ENVIRONMENT: str = "development"
     
