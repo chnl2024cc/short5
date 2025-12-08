@@ -47,7 +47,10 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     
     # GeoIP (Visitor Analytics)
-    GEOIP_DB_PATH: str | None = None  # Path to MaxMind GeoLite2-City.mmdb file
+    # Supports both MaxMind GeoLite2-City.mmdb and DB-IP dbip-city-lite databases
+    # Both use the same .mmdb format and are compatible with geoip2 library
+    # REQUIRED: Set via GEOIP_DB_PATH environment variable for geographic tracking
+    GEOIP_DB_PATH: str | None = None  # Path to GeoIP database file (.mmdb format)
     
     # Environment
     ENVIRONMENT: str = "development"

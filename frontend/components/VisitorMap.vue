@@ -31,8 +31,12 @@ onMounted(async () => {
     LeafletModule = await import('leaflet')
     await import('leaflet/dist/leaflet.css')
   
-    // Initialize map
+    // Initialize map with world view (zoomed out)
     map = LeafletModule.default.map('visitor-map').setView([20, 0], 2)
+    
+    // Set minimum zoom level to prevent zooming in too much
+    map.setMinZoom(1)
+    map.setMaxZoom(18)
     
     // Add tile layer (OpenStreetMap)
     LeafletModule.default.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -88,10 +92,28 @@ const updateMarkers = async () => {
     markers.push(marker)
   })
   
-  // Fit map to show all markers
+  // Fit map to show all markers with padding
   if (markers.length > 0 && LeafletModule) {
     const group = new LeafletModule.default.FeatureGroup(markers)
-    map.fitBounds(group.getBounds().pad(0.1))
+    const bounds = group.getBounds()
+    
+    // Add padding to show more context around markers (20% padding)
+    const paddedBounds = bounds.pad(0.2)
+    
+    // Fit bounds but ensure minimum zoom level (don't zoom in too much)
+    map.fitBounds(paddedBounds, {
+      padding: [20, 20], // Additional padding in pixels
+      maxZoom: 10, // Maximum zoom when auto-fitting (prevents zooming in too much on single locations)
+    })
+    
+    // If all markers are in the same location (e.g., all Alaska defaults), ensure we're zoomed out enough
+    if (bounds.getNorth() - bounds.getSouth() < 0.1 && bounds.getEast() - bounds.getWest() < 0.1) {
+      // Very small bounds (likely same location) - zoom out more
+      map.setZoom(Math.max(map.getZoom(), 3))
+    }
+  } else if (markers.length === 0) {
+    // No markers - show world view
+    map.setView([20, 0], 2)
   }
 }
 

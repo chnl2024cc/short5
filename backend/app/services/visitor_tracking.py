@@ -39,6 +39,10 @@ class VisitorTrackingService:
             if forwarded:
                 ip_address = forwarded
         
+        # Log if it's a localhost/private IP (won't have geo data)
+        if ip_address in ('127.0.0.1', '::1', 'localhost') or ip_address.startswith('192.168.') or ip_address.startswith('10.') or ip_address.startswith('172.'):
+            logger.debug(f"Tracking localhost/private IP: {ip_address} (will not have geo data)")
+        
         return ip_address
     
     def _get_session_id(self, request: Request) -> str:
@@ -85,6 +89,11 @@ class VisitorTrackingService:
             # Skip availability check to avoid loading database unnecessarily
             # The lookup method itself handles lazy loading
             geo_data = self.geoip_service.lookup(ip_address)
+            
+            # Log for debugging
+            if not geo_data.get('country') and not geo_data.get('city'):
+                logger.warning(f"No geo data found for IP: {ip_address}. GeoIP service available: {self.geoip_service.is_available()}. "
+                             f"This is normal for localhost (127.0.0.1) or private IP addresses.")
             
             # Create visitor log entry
             visitor_log = VisitorLog(
