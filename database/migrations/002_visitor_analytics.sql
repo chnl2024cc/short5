@@ -1,6 +1,13 @@
 -- Migration: 002_visitor_analytics.sql
 -- Description: Visitor analytics tracking table (MVP)
--- Run after initial schema
+-- Run after initial schema (001_initial_schema.sql)
+-- 
+-- This migration is idempotent - safe to run multiple times
+
+BEGIN;
+
+-- Ensure UUID extension exists
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Visitor Logs Table (MVP - Minimal Implementation)
 CREATE TABLE IF NOT EXISTS visitor_logs (
@@ -31,4 +38,6 @@ CREATE INDEX IF NOT EXISTS idx_visitor_logs_visited_at ON visitor_logs(visited_a
 CREATE INDEX IF NOT EXISTS idx_visitor_logs_url ON visitor_logs(url);
 CREATE INDEX IF NOT EXISTS idx_visitor_logs_country ON visitor_logs(country);
 CREATE INDEX IF NOT EXISTS idx_visitor_logs_coordinates ON visitor_logs(latitude, longitude) WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
+
+COMMIT;
 
