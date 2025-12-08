@@ -28,3 +28,7 @@ uploads/
 *.mov
 *.avi
 
+# GeoIP Database files (large binary files)
+geodata/*.mmdb
+*.mmdb
+
