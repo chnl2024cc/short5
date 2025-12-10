@@ -1,0 +1,81 @@
+# Example: Add Spring Boot backend to docker-compose.yml
+# 
+# To use: Copy this service definition into your docker-compose.yml
+# Or use: docker-compose -f docker-compose.yml -f docker-compose.spring-boot.yml up
+
+services:
+  # Spring Boot Backend (Alternative to FastAPI)
+  backend-spring:
+    build:
+      context: ./backend-spring
+      dockerfile: Dockerfile
+    container_name: short5_backend_spring
+    environment:
+      # Database (same as FastAPI backend)
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-short5_db}
+      POSTGRES_USER: ${POSTGRES_USER:-short5_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-short5_password}
+      
+      # Redis (same instance)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      
+      # JWT (use same secret as FastAPI for compatibility)
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      
+      # File Storage (same volume as FastAPI)
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-524288000}  # 500MB
+      ALLOWED_VIDEO_FORMATS: ${ALLOWED_VIDEO_FORMATS:-.mp4,.mov,.avi}
+      
+      # GeoIP (same database)
+      GEOIP_DB_PATH: ${GEOIP_DB_PATH:-/app/geodata/dbip-city-lite-2025-12.mmdb}
+      
+      # Celery/video_worker integration
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      # Option: Use FastAPI as task gateway for video processing
+      TASK_GATEWAY_URL: ${TASK_GATEWAY_URL:-http://backend:8000/api/v1/internal/tasks}
+      
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080,http://localhost:5173}
+      
+      # Environment
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      SPRING_BACKEND_PORT: 8080
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SHOW_SQL: ${SHOW_SQL:-false}
+    ports:
+      - "${SPRING_BACKEND_PORT:-8080}:8080"
+    volumes:
+      # Same uploads volume as FastAPI backend
+      - backend_uploads:/app/uploads
+      # GeoIP database (read-only)
+      - ./geodata:/app/geodata:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # Optional: Wait for FastAPI backend if using it as task gateway
+      # backend:
+      #   condition: service_started
+    networks:
+      - short5_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+# Note: backend_uploads volume is already defined in main docker-compose.yml
+# No need to redefine it here
+

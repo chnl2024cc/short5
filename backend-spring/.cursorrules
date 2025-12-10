@@ -1,0 +1,277 @@
+# Spring Boot Development Rules for AI Agents
+
+You are an expert Spring Boot developer working on the Short5 Platform backend. Follow these rules strictly when writing or modifying code.
+
+## Project Context
+- Spring Boot 3.2.0
+- Java 17
+- Maven build system
+- PostgreSQL database
+- Redis for caching
+- JWT for authentication
+- Package: com.short5
+
+## Mandatory Rules
+
+### 1. Maven Project Structure (Directory Layout)
+- ALWAYS follow Maven standard directory layout:
+  - `src/main/java/` - All Java source code (.java files)
+  - `src/main/resources/` - Configuration files (application.yml, etc.)
+  - `src/test/java/` - All test code
+  - `src/test/resources/` - Test configuration and test data
+  - `pom.xml` - Maven build file (at project root)
+- NEVER put source code outside `src/main/java/`
+- NEVER put configuration files outside `src/main/resources/`
+- Main class `Short5Application.java` MUST be in root package: `com.short5`
+
+### 2. Package Structure (Inside src/main/java/com/short5/)
+- ALWAYS follow the standard Spring Boot package structure:
+  - `config/` - Configuration classes (@Configuration)
+  - `controller/` - REST controllers only (@RestController)
+  - `service/` - Business logic only (@Service)
+  - `repository/` - Data access only (@Repository)
+  - `entity/` - Entity classes (@Entity) - Note: use `entity/` not `model/` to match @EntityScan
+  - `dto/` - Data Transfer Objects (separate request/response DTOs)
+  - `exception/` - Custom exceptions and handlers
+  - `security/` - Security configuration
+  - `util/` - Utility classes
+
+### 2. Dependency Injection
+- ALWAYS use constructor injection with `@RequiredArgsConstructor` from Lombok
+- NEVER use field injection with `@Autowired` for required dependencies
+- Example:
+```java
+@Service
+@RequiredArgsConstructor
+public class UserService {
+    private final UserRepository userRepository;
+    private final EmailService emailService;
+}
+```
+
+### 3. Layer Separation
+- Controllers: Handle HTTP only, delegate to services, use DTOs
+- Services: Contain ALL business logic, use @Transactional for write operations
+- Repositories: Data access ONLY, no business logic
+- NEVER put business logic in controllers or repositories
+
+### 4. DTOs (Data Transfer Objects)
+- ALWAYS use DTOs for API request/response, NEVER expose entities directly
+- Create separate DTOs: `CreateUserRequest`, `UserResponseDto`, `UpdateUserRequest`
+- Use `@Valid` annotation on request DTOs in controllers
+- Map between entities and DTOs in service layer
+
+### 5. Validation
+- ALWAYS validate input using Bean Validation annotations
+- Use `@NotBlank`, `@Email`, `@Size`, `@NotNull`, etc. on DTOs
+- ALWAYS use `@Valid` on `@RequestBody` parameters
+
+### 6. Error Handling
+- Create custom exception classes extending RuntimeException
+- Use `@ControllerAdvice` for global exception handling
+- NEVER expose stack traces or internal errors to clients
+- Return proper HTTP status codes (404, 400, 500, etc.)
+
+### 7. Database & JPA
+- Use `@Transactional` on service methods that modify data
+- Use `@Transactional(readOnly = true)` for read-only operations
+- NEVER use `@Transactional` on controllers
+- Use `Optional<>` for nullable repository returns
+- Use lazy loading (`FetchType.LAZY`) by default
+- Avoid N+1 queries - use `@EntityGraph` or `JOIN FETCH` when needed
+- Use `@CreatedDate` and `@LastModifiedDate` for audit fields
+
+### 8. Security
+- ALWAYS hash passwords using BCryptPasswordEncoder
+- NEVER store plain text passwords
+- Use parameterized queries (JPA handles this automatically)
+- Validate all input
+- Use specific CORS origins, never wildcard "*" in production
+
+### 9. API Design
+- Use proper HTTP status codes:
+  - 201 CREATED for POST
+  - 200 OK for GET/PUT
+  - 204 NO_CONTENT for DELETE
+  - 404 NOT_FOUND for missing resources
+  - 400 BAD_REQUEST for validation errors
+- Implement pagination for list endpoints
+- Use consistent API versioning: `/api/v1/...`
+- Return `ResponseEntity<>` with proper status codes
+
+### 10. Configuration
+- Use `application.yml` for configuration
+- Use `@ConfigurationProperties` for complex configuration
+- NEVER hardcode configuration values
+- Use environment variables for secrets (${ENV_VAR})
+- Reference: `SPRING_BOOT_BEST_PRACTICES.md` for details
+
+### 11. Testing
+- Write unit tests for services using Mockito
+- Write integration tests for controllers using `@SpringBootTest` and `MockMvc`
+- Use `@DataJpaTest` for repository tests
+- Aim for at least 70% code coverage
+
+### 12. Logging
+- Use SLF4J with `@Slf4j` annotation
+- NEVER use `System.out.println`
+- Log at appropriate levels: ERROR, WARN, INFO, DEBUG
+
+### 13. Design Patterns
+- Use Repository Pattern for all data access
+- Use Service Layer Pattern for business logic
+- Use DTO Pattern for all API boundaries
+- Use Builder Pattern for complex object construction (Lombok `@Builder`)
+- Use Strategy Pattern for interchangeable algorithms
+- Use Observer Pattern (Spring Events) for event-driven operations
+- Use Factory Pattern for complex object creation
+- Reference: `SPRING_BOOT_BEST_PRACTICES.md` section 11 for details
+
+### 14. Code Style
+- Use Lombok appropriately: `@RequiredArgsConstructor`, `@Getter`, `@Setter`, `@Builder`
+- NEVER use `@Data` on JPA entities (causes lazy loading issues)
+- Use `@EqualsAndHashCode(onlyExplicitlyIncluded = true)` on entities
+- Follow Java naming conventions:
+  - Classes: PascalCase
+  - Methods: camelCase
+  - Constants: UPPER_SNAKE_CASE
+  - Packages: lowercase
+
+### 15. Performance
+- Use `@Cacheable` for expensive operations
+- Use `@Async` for long-running tasks
+- Filter at database level, not in memory
+- Use connection pooling (configured in application.yml)
+
+## Strict NOGOs (Never Do These)
+
+1. ❌ NEVER use `@Autowired` on fields (use constructor injection)
+2. ❌ NEVER put business logic in controllers
+3. ❌ NEVER return entities from controllers (use DTOs)
+4. ❌ NEVER use `@Transactional` on controllers
+5. ❌ NEVER catch and swallow exceptions silently
+6. ❌ NEVER use `System.out.println` for logging
+7. ❌ NEVER hardcode configuration values
+8. ❌ NEVER use eager fetching everywhere (use lazy by default)
+9. ❌ NEVER return null from repository methods (use Optional)
+10. ❌ NEVER expose stack traces to clients
+11. ❌ NEVER commit secrets or sensitive data
+12. ❌ NEVER use wildcard CORS in production
+13. ❌ NEVER store plain text passwords
+14. ❌ NEVER skip input validation
+15. ❌ NEVER use `@Data` on JPA entities
+
+## Code Generation Checklist
+
+When generating code, ensure:
+- [ ] Uses constructor injection with `@RequiredArgsConstructor`
+- [ ] Controllers use DTOs, not entities
+- [ ] Service methods have `@Transactional` for writes
+- [ ] Input validation with `@Valid` and Bean Validation
+- [ ] Proper error handling with custom exceptions
+- [ ] Proper HTTP status codes
+- [ ] Logging with SLF4J
+- [ ] No hardcoded values
+- [ ] Follows package structure
+- [ ] Uses appropriate design patterns
+- [ ] Includes JavaDoc comments for public methods
+
+## When in Doubt
+
+1. Refer to `SPRING_BOOT_BEST_PRACTICES.md` for detailed examples
+2. Follow existing code patterns in the codebase
+3. Prefer Spring Boot conventions over custom solutions
+4. Ask for clarification if requirements are unclear
+
+## Example Template
+
+When creating a new feature, follow this structure:
+
+```java
+// 1. Entity (model/User.java)
+@Entity
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+public class User {
+    @Id
+    @GeneratedValue
+    @EqualsAndHashCode.Include
+    private Long id;
+    // ... fields
+}
+
+// 2. Repository (repository/UserRepository.java)
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByEmail(String email);
+}
+
+// 3. DTOs (dto/CreateUserRequest.java, dto/UserResponseDto.java)
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class CreateUserRequest {
+    @NotBlank @Email
+    private String email;
+    @NotBlank @Size(min = 8)
+    private String password;
+}
+
+// 4. Service (service/UserService.java)
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class UserService {
+    private final UserRepository userRepository;
+    
+    public UserResponseDto createUser(CreateUserRequest request) {
+        // Business logic here
+    }
+}
+
+// 5. Controller (controller/UserController.java)
+@RestController
+@RequestMapping("/api/v1/users")
+@RequiredArgsConstructor
+public class UserController {
+    private final UserService userService;
+    
+    @PostMapping
+    public ResponseEntity<UserResponseDto> createUser(@Valid @RequestBody CreateUserRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(userService.createUser(request));
+    }
+}
+
+// 6. Exception (exception/UserNotFoundException.java)
+public class UserNotFoundException extends RuntimeException {
+    public UserNotFoundException(String message) {
+        super(message);
+    }
+}
+
+// 7. Exception Handler (exception/GlobalExceptionHandler.java)
+@ControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException ex) {
+        // Handle exception
+    }
+}
+```
+
+## Remember
+
+- Code quality over speed
+- Follow Spring Boot best practices
+- Write testable code
+- Keep layers separated
+- Use DTOs for APIs
+- Validate everything
+- Handle errors properly
+- Log appropriately
+- Never compromise on security
+
