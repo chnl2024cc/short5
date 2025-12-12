@@ -11,11 +11,11 @@ export const useActionHint = () => {
 
   /**
    * Check if the hint has been dismissed (stored in localStorage)
+   * DISABLED: Always returns false to prevent hints from showing
    */
   const checkActionHint = (): boolean => {
-    if (!process.client) return false
-    const dismissed = localStorage.getItem(ACTION_HINT_DISMISSED_KEY)
-    return !dismissed
+    // Hint is disabled - always return false
+    return false
   }
 
   /**
@@ -30,21 +30,11 @@ export const useActionHint = () => {
 
   /**
    * Show the hint if it hasn't been dismissed
-   * The hint will stay visible until the user interacts (calls dismissActionHint)
+   * DISABLED: Does nothing to prevent hints from showing
    */
   const showHint = (delay: number = 0) => {
-    if (!checkActionHint() || showActionHint.value) return
-
-    const show = () => {
-      showActionHint.value = true
-      // Hint stays visible until user interacts (no auto-dismiss)
-    }
-
-    if (delay > 0) {
-      setTimeout(show, delay)
-    } else {
-      show()
-    }
+    // Hint is disabled - do nothing
+    return
   }
 
   return {

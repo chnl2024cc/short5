@@ -51,13 +51,6 @@
         @swiped="handleSwipe"
         @view-update="handleViewUpdate"
         @error="handleVideoError"
-        @video-started="handleVideoStarted"
-      />
-      
-      <!-- Swipe Hint Overlay - Shows on first visit -->
-      <SwipeHintOverlay
-        :show="showSwipeHint"
-        @dismiss="dismissSwipeHint"
       />
     </div>
     
@@ -85,9 +78,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useVideosStore } from '~/stores/videos'
 import { useAuthStore } from '~/stores/auth'
 import { useApi } from '~/composables/useApi'
-import { useSwipeHint } from '~/composables/useSwipeHint'
 import type { Video, FeedResponse } from '~/types/video'
-import SwipeHintOverlay from './SwipeHintOverlay.vue'
 
 const route = useRoute()
 const videosStore = useVideosStore()
@@ -113,8 +104,6 @@ const targetVideoId = ref<string | null>(null)
 const searchAttempts = ref(0)
 const maxSearchAttempts = 10 // Maximum number of feed loads to search for target video
 
-// Swipe hint management
-const { showSwipeHint, dismissSwipeHint, showHint, checkSwipeHint } = useSwipeHint()
 
 // Refs for VideoSwiper components to control playback
 const videoRefs = ref<Array<any>>([])
@@ -255,10 +244,6 @@ const loadFeed = async (cursor?: string) => {
 }
 
 const handleSwipe = async (direction: 'like' | 'not_like' | 'share') => {
-  // Auto-dismiss hint on first swipe
-  if (showSwipeHint.value) {
-    dismissSwipeHint()
-  }
   const currentVideo = videos.value[currentIndex.value]
   if (!currentVideo) return
   
@@ -357,23 +342,6 @@ const ensureTargetVideoActive = async () => {
   }
 }
 
-// Track if we've shown the hint for the current video
-const videoStartedForHint = ref(false)
-
-// Handle when video starts playing - show hint 5 seconds later
-const handleVideoStarted = () => {
-  // Only show hint once per video session
-  if (!videoStartedForHint.value && checkSwipeHint()) {
-    videoStartedForHint.value = true
-    // Show hint 5 seconds after video starts playing
-    showHint(5000)
-  }
-}
-
-// Reset video started flag when video changes
-watch(() => currentIndex.value, () => {
-  videoStartedForHint.value = false
-})
 
 // Track share click when a shared link is opened
 const trackShareClick = async (videoId: string, sharerId: string) => {
