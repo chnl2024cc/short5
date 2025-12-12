@@ -118,7 +118,7 @@
     
     <!-- Action Buttons - Always visible for easy access -->
     <div 
-      class="absolute bottom-0 left-0 right-2 flex items-center justify-center gap-16 z-35 action-buttons-container"
+      class="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-16 z-35 action-buttons-container"
     >
       <!-- Not Like Button (Left) -->
       <button
