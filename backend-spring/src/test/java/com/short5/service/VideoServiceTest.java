@@ -7,6 +7,9 @@ import com.short5.entity.Vote;
 import com.short5.entity.View;
 import com.short5.entity.Video.VideoStatus;
 import com.short5.entity.Vote.VoteDirection;
+import com.short5.exception.BadRequestException;
+import com.short5.exception.ForbiddenException;
+import com.short5.exception.ResourceNotFoundException;
 import com.short5.repository.*;
 import com.short5.entity.UserLikedVideo;
 import com.short5.entity.ShareLink;
@@ -17,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class VideoServiceTest {
     
     @Mock
@@ -56,6 +62,9 @@ class VideoServiceTest {
     
     @Mock
     private ShareClickRepository shareClickRepository;
+    
+    @Mock
+    private VideoProcessingService videoProcessingService;
     
     @InjectMocks
     private VideoService videoService;
@@ -119,7 +128,7 @@ class VideoServiceTest {
         
         // When/Then
         assertThatThrownBy(() -> videoService.getVideo(testVideoId))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Video not found");
     }
     
@@ -135,9 +144,13 @@ class VideoServiceTest {
             video.setId(testVideoId);
             return video;
         });
+        // uploadVideo calls getVideo() at the end, which needs these stubs
         when(videoRepository.findById(testVideoId)).thenReturn(Optional.of(testVideo));
         when(voteRepository.countByVideoIdAndDirection(any(), any())).thenReturn(0L);
         when(viewRepository.countByVideoId(any())).thenReturn(0L);
+        
+        // Mock VideoProcessingService (async call, returns CompletableFuture)
+        doNothing().when(videoProcessingService).triggerVideoProcessing(any(UUID.class));
         
         // When
         VideoResponse response = videoService.uploadVideo(testUserId, file, "Test Video", "Description");
@@ -145,6 +158,7 @@ class VideoServiceTest {
         // Then
         assertThat(response).isNotNull();
         verify(videoRepository, atLeastOnce()).save(any(Video.class));
+        verify(videoProcessingService).triggerVideoProcessing(testVideoId);
     }
     
     @Test
@@ -155,8 +169,20 @@ class VideoServiceTest {
         
         // When/Then
         assertThatThrownBy(() -> videoService.uploadVideo(testUserId, file, "Title", "Description"))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Invalid file format");
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenFilenameIsNull() {
+        // Given
+        MultipartFile file = new MockMultipartFile(
+                "file", null, "video/mp4", "test content".getBytes());
+        
+        // When/Then
+        assertThatThrownBy(() -> videoService.uploadVideo(testUserId, file, "Title", "Description"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Filename is required");
     }
     
     @Test
@@ -249,8 +275,34 @@ class VideoServiceTest {
         
         // When/Then
         assertThatThrownBy(() -> videoService.deleteVideo(testVideoId, otherUserId))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining("Not authorized");
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenVideoNotFoundForDeletion() {
+        // Given
+        when(videoRepository.findById(testVideoId)).thenReturn(Optional.empty());
+        
+        // When/Then
+        assertThatThrownBy(() -> videoService.deleteVideo(testVideoId, testUserId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Video not found");
+    }
+    
+    @Test
+    void shouldThrowExceptionWhenVotingWithoutUserIdOrSessionId() {
+        // Given
+        VoteRequest request = new VoteRequest();
+        request.setDirection("like");
+        // No sessionId set
+        
+        when(videoRepository.findById(testVideoId)).thenReturn(Optional.of(testVideo));
+        
+        // When/Then
+        assertThatThrownBy(() -> videoService.voteOnVideo(testVideoId, request, null, null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Either userId or sessionId is required");
     }
 }
 

@@ -115,15 +115,15 @@ services:
 
 ## API Endpoints
 
-All endpoints match the FastAPI backend:
+All endpoints match the FastAPI backend. For complete API documentation, see [docs/API.md](docs/API.md).
 
+Quick reference:
 - `POST /api/v1/auth/register` - User registration
 - `POST /api/v1/auth/login` - User login
 - `GET /api/v1/users/me` - Get current user
 - `GET /api/v1/videos/{id}` - Get video
 - `POST /api/v1/videos/upload` - Upload video
 - `GET /api/v1/feed` - Get feed
-- ... (see API_SPEC.md for complete list)
 
 ## Health Check
 
@@ -153,27 +153,37 @@ mvn test
 
 ## Integration with video_worker
 
-The Spring Boot backend can integrate with the existing Python video_worker in several ways:
+The Spring Boot backend integrates with the existing Python video_worker via HTTP bridge:
 
-1. **HTTP Bridge** (Recommended): Spring Boot calls FastAPI endpoint which sends tasks to Celery
-2. **Direct Redis**: Spring Boot sends tasks directly to Redis using Celery protocol (requires Java Celery client)
-3. **HTTP API**: Create a simple HTTP service that bridges Spring Boot and Celery
+1. **HTTP Bridge** (Implemented): Spring Boot calls FastAPI endpoint which sends tasks to Celery
+2. Video processing is triggered asynchronously after upload
+3. Processing completion callbacks update video status
 
-See `SPRING_BOOT_MIGRATION.md` for detailed integration options.
+For detailed implementation information, see [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[docs/QUICK_START.md](docs/QUICK_START.md)** - Quick start guide for getting the Spring Boot backend running
+- **[docs/MIGRATION.md](docs/MIGRATION.md)** - Migration plan and analysis from FastAPI to Spring Boot
+- **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development guide, best practices, and coding standards
+- **[docs/API.md](docs/API.md)** - Complete API endpoints documentation
+- **[docs/TESTING.md](docs/TESTING.md)** - Testing guide and test structure
+- **[docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)** - Implementation history and status
 
 ## Status
 
-🚧 **Work in Progress**
+✅ **Production Ready**
 
-This is an initial implementation. The following are still TODO:
-
-- [ ] Complete entity models
-- [ ] Implement all API endpoints
-- [ ] JWT authentication service
-- [ ] File upload service
-- [ ] Feed/recommendation algorithm
-- [ ] Integration with video_worker
-- [ ] Unit and integration tests
+All core features have been implemented:
+- ✅ Complete entity models
+- ✅ All API endpoints implemented
+- ✅ JWT authentication service
+- ✅ File upload service
+- ✅ Feed/recommendation algorithm
+- ✅ Integration with video_worker
+- ✅ Unit and integration tests
 
 ## License
 

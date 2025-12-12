@@ -5,8 +5,11 @@ import com.short5.dto.*;
 import com.short5.service.VideoService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -21,7 +24,21 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(VideoController.class)
+@WebMvcTest(
+    controllers = VideoController.class,
+    excludeAutoConfiguration = {
+        org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class
+    },
+    excludeFilters = @ComponentScan.Filter(
+        type = FilterType.ASSIGNABLE_TYPE,
+        classes = {
+            com.short5.config.DatabaseConfig.class,
+            com.short5.config.AsyncConfig.class,
+            com.short5.config.RestTemplateConfig.class
+        }
+    )
+)
+@AutoConfigureMockMvc(addFilters = false)
 class VideoControllerTest {
     
     @Autowired
@@ -32,6 +49,16 @@ class VideoControllerTest {
     
     @MockBean
     private VideoService videoService;
+    
+    // Mock security beans
+    @MockBean
+    private com.short5.security.JwtService jwtService;
+    
+    @MockBean
+    private com.short5.security.CustomUserDetailsService userDetailsService;
+    
+    @MockBean
+    private com.short5.security.JwtAuthenticationFilter jwtAuthenticationFilter;
     
     private UUID testVideoId = UUID.randomUUID();
     

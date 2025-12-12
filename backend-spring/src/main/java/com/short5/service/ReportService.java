@@ -6,6 +6,9 @@ import com.short5.entity.Report.ReportType;
 import com.short5.entity.Report.ReportStatus;
 import com.short5.entity.User;
 import com.short5.entity.Video;
+import com.short5.exception.BadRequestException;
+import com.short5.exception.ForbiddenException;
+import com.short5.exception.ResourceNotFoundException;
 import com.short5.repository.ReportRepository;
 import com.short5.repository.UserRepository;
 import com.short5.repository.VideoRepository;
@@ -32,7 +35,7 @@ public class ReportService {
         try {
             reportType = request.getReportType();
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Invalid report_type. Must be 'VIDEO' or 'USER'");
+            throw new BadRequestException("Invalid report_type. Must be 'VIDEO' or 'USER'");
         }
         
         UUID targetId = UUID.fromString(request.getTargetId());
@@ -40,19 +43,19 @@ public class ReportService {
         // Validate target exists
         if (reportType == ReportType.VIDEO) {
             Video video = videoRepository.findById(targetId)
-                    .orElseThrow(() -> new RuntimeException("Video not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Video not found: " + targetId));
             
             // Prevent reporting own video
             if (video.getUserId().equals(reporterId)) {
-                throw new RuntimeException("Cannot report your own video");
+                throw new ForbiddenException("Cannot report your own video");
             }
         } else {
             User targetUser = userRepository.findById(targetId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found: " + targetId));
             
             // Prevent reporting yourself
             if (targetUser.getId().equals(reporterId)) {
-                throw new RuntimeException("Cannot report yourself");
+                throw new ForbiddenException("Cannot report yourself");
             }
         }
         
@@ -61,7 +64,7 @@ public class ReportService {
                 .anyMatch(report -> report.getReportType() == reportType && report.getTargetId().equals(targetId));
         
         if (alreadyReported) {
-            throw new RuntimeException("You have already reported this " + reportType.name().toLowerCase());
+            throw new BadRequestException("You have already reported this " + reportType.name().toLowerCase());
         }
         
         // Create report

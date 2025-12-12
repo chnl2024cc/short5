@@ -5,6 +5,8 @@ import com.short5.entity.User;
 import com.short5.entity.Vote;
 import com.short5.entity.UserLikedVideo;
 import com.short5.entity.Vote.VoteDirection;
+import com.short5.exception.BadRequestException;
+import com.short5.exception.ResourceNotFoundException;
 import com.short5.repository.UserRepository;
 import com.short5.repository.VoteRepository;
 import com.short5.repository.UserLikedVideoRepository;
@@ -34,12 +36,12 @@ public class AuthService {
     public AuthResponse register(UserCreateRequest request) {
         // Check if username exists
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new RuntimeException("Username already exists");
+            throw new BadRequestException("Username already exists");
         }
         
         // Check if email exists
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already exists");
+            throw new BadRequestException("Email already exists");
         }
         
         // Create user
@@ -84,16 +86,16 @@ public class AuthService {
     public AuthResponse login(LoginRequest request) {
         // Find user by email
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+                .orElseThrow(() -> new BadRequestException("Invalid email or password"));
         
         // Verify password
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new RuntimeException("Invalid email or password");
+            throw new BadRequestException("Invalid email or password");
         }
         
         // Check if user is active
         if (!user.getIsActive()) {
-            throw new RuntimeException("User account is inactive");
+            throw new BadRequestException("User account is inactive");
         }
         
         // Create tokens
@@ -127,7 +129,7 @@ public class AuthService {
     public TokenResponse refreshToken(RefreshTokenRequest request) {
         // Validate refresh token
         if (!jwtService.validateRefreshToken(request.getRefreshToken())) {
-            throw new RuntimeException("Invalid refresh token");
+            throw new BadRequestException("Invalid refresh token");
         }
         
         // Extract user ID from token
@@ -136,10 +138,10 @@ public class AuthService {
         
         // Verify user exists and is active
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
         
         if (!user.getIsActive()) {
-            throw new RuntimeException("User account is inactive");
+            throw new BadRequestException("User account is inactive");
         }
         
         // Generate new tokens

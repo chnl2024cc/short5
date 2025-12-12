@@ -5,6 +5,8 @@ import com.short5.dto.LoginRequest;
 import com.short5.dto.UserCreateRequest;
 import com.short5.entity.User;
 import com.short5.entity.Vote;
+import com.short5.exception.BadRequestException;
+import com.short5.exception.ResourceNotFoundException;
 import com.short5.repository.UserRepository;
 import com.short5.repository.VoteRepository;
 import com.short5.repository.UserLikedVideoRepository;
@@ -110,7 +112,7 @@ class AuthServiceTest {
         
         // When/Then
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Username already exists");
         
         verify(userRepository, never()).save(any(User.class));
@@ -129,7 +131,7 @@ class AuthServiceTest {
         
         // When/Then
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Email already exists");
         
         verify(userRepository, never()).save(any(User.class));
@@ -171,7 +173,7 @@ class AuthServiceTest {
         
         // When/Then
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Invalid email or password");
     }
     
@@ -187,7 +189,7 @@ class AuthServiceTest {
         
         // When/Then
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Invalid email or password");
     }
     
@@ -204,7 +206,7 @@ class AuthServiceTest {
         
         // When/Then
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("User account is inactive");
     }
     

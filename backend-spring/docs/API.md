@@ -143,9 +143,9 @@ All endpoints match the FastAPI backend:
 
 ## Next Steps (Optional Enhancements)
 
-1. **Video Worker Integration** - Connect to Celery for video processing
+1. **Video Worker Integration** - ✅ Completed (HTTP bridge to Celery)
 2. **Visitor Tracking Middleware** - Automatic visitor tracking with GeoIP
-3. **Static File Serving** - Serve uploaded videos via Spring Boot
+3. **Static File Serving** - ✅ Completed (serves uploaded videos)
 4. **Caching** - Add Redis caching for frequently accessed data
 5. **Rate Limiting** - Add rate limiting for API endpoints
 
@@ -164,4 +164,3 @@ To test the endpoints:
 - Database: Same PostgreSQL database (both backends can coexist)
 - Redis: Same Redis instance for caching/tasks
 - File Storage: Same `/app/uploads` directory structure
-

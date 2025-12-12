@@ -22,6 +22,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+    name = "spring.security.enabled",
+    havingValue = "true",
+    matchIfMissing = true
+)
 public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthFilter;
@@ -37,6 +42,8 @@ public class SecurityConfig {
                     "/api/v1/auth/**",
                     "/api/v1/feed",
                     "/api/v1/videos/{id}",
+                    "/api/v1/videos/*/vote",      // Allow anonymous voting (PRD/RFC requirement)
+                    "/api/v1/videos/*/view",       // Allow anonymous view tracking
                     "/health",
                     "/actuator/health",
                     "/"

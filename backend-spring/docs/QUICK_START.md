@@ -14,7 +14,7 @@ The Spring Boot backend is designed to work alongside the FastAPI backend, shari
 ## What Has Been Created
 
 ### 1. Migration Analysis
-- `SPRING_BOOT_MIGRATION.md` - Complete migration plan and analysis
+- [MIGRATION.md](MIGRATION.md) - Complete migration plan and analysis
 
 ### 2. Spring Boot Project Structure
 ```
@@ -206,7 +206,7 @@ const API_BASE_URL = 'http://localhost:8080/api/v1'
 
 ## Next Steps
 
-1. Review the migration plan: `SPRING_BOOT_MIGRATION.md`
+1. Review the migration plan: [MIGRATION.md](MIGRATION.md)
 2. Start implementing entities (see existing SQLAlchemy models)
 3. Implement authentication endpoints first
 4. Gradually migrate other endpoints
@@ -215,7 +215,8 @@ const API_BASE_URL = 'http://localhost:8080/api/v1'
 ## Support
 
 For questions or issues, refer to:
-- `SPRING_BOOT_MIGRATION.md` - Detailed migration plan
-- `backend-spring/README.md` - Spring Boot specific docs
-- Main `README.md` - Project overview
+- [MIGRATION.md](MIGRATION.md) - Detailed migration plan
+- [README.md](../README.md) - Spring Boot specific docs
+- [DEVELOPMENT.md](DEVELOPMENT.md) - Development guide and best practices
+- [API.md](API.md) - Complete API documentation
 

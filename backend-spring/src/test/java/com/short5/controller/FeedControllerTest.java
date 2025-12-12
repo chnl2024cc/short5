@@ -5,8 +5,11 @@ import com.short5.dto.VideoResponse;
 import com.short5.service.FeedService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -17,7 +20,21 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(FeedController.class)
+@WebMvcTest(
+    controllers = FeedController.class,
+    excludeAutoConfiguration = {
+        org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class
+    },
+    excludeFilters = @ComponentScan.Filter(
+        type = FilterType.ASSIGNABLE_TYPE,
+        classes = {
+            com.short5.config.DatabaseConfig.class,
+            com.short5.config.AsyncConfig.class,
+            com.short5.config.RestTemplateConfig.class
+        }
+    )
+)
+@AutoConfigureMockMvc(addFilters = false)
 class FeedControllerTest {
     
     @Autowired
@@ -25,6 +42,16 @@ class FeedControllerTest {
     
     @MockBean
     private FeedService feedService;
+    
+    // Mock security beans
+    @MockBean
+    private com.short5.security.JwtService jwtService;
+    
+    @MockBean
+    private com.short5.security.CustomUserDetailsService userDetailsService;
+    
+    @MockBean
+    private com.short5.security.JwtAuthenticationFilter jwtAuthenticationFilter;
     
     @Test
     void shouldGetFeedForAnonymousUser() throws Exception {

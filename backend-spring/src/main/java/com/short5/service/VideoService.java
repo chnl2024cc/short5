@@ -4,6 +4,9 @@ import com.short5.dto.*;
 import com.short5.entity.*;
 import com.short5.entity.Video.VideoStatus;
 import com.short5.entity.Vote.VoteDirection;
+import com.short5.exception.BadRequestException;
+import com.short5.exception.ForbiddenException;
+import com.short5.exception.ResourceNotFoundException;
 import com.short5.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +35,7 @@ public class VideoService {
     private final UserLikedVideoRepository userLikedVideoRepository;
     private final ShareLinkRepository shareLinkRepository;
     private final ShareClickRepository shareClickRepository;
+    private final VideoProcessingService videoProcessingService;
     
     @Value("${file.upload-dir:/app/uploads}")
     private String uploadDir;
@@ -39,7 +43,7 @@ public class VideoService {
     @Transactional(readOnly = true)
     public VideoResponse getVideo(UUID videoId) {
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Video not found: " + videoId));
         
         User user = video.getUser();
         if (user == null) {
@@ -78,20 +82,20 @@ public class VideoService {
         // Validate file extension
         String filename = file.getOriginalFilename();
         if (filename == null) {
-            throw new RuntimeException("Filename is required");
+            throw new BadRequestException("Filename is required");
         }
         
         String fileExt = filename.substring(filename.lastIndexOf('.')).toLowerCase();
         List<String> allowedFormats = List.of(".mp4", ".mov", ".avi");
         if (!allowedFormats.contains(fileExt)) {
-            throw new RuntimeException("Invalid file format. Allowed: " + String.join(", ", allowedFormats));
+            throw new BadRequestException("Invalid file format. Allowed: " + String.join(", ", allowedFormats));
         }
         
         // Validate file size (500MB max)
         long fileSize = file.getSize();
         long maxSize = 500 * 1024 * 1024; // 500MB
         if (fileSize > maxSize) {
-            throw new RuntimeException("File too large. Max size: 500MB");
+            throw new BadRequestException("File too large. Max size: 500MB");
         }
         
         // Create video record
@@ -119,8 +123,9 @@ public class VideoService {
         video.setStatus(VideoStatus.PROCESSING);
         video = videoRepository.save(video);
         
-        // TODO: Trigger video processing task (Celery integration)
-        log.info("Video {} uploaded, ready for processing", video.getId());
+        // Trigger video processing task asynchronously
+        videoProcessingService.triggerVideoProcessing(video.getId());
+        log.info("Video {} uploaded, processing task triggered", video.getId());
         
         return getVideo(video.getId());
     }
@@ -128,11 +133,11 @@ public class VideoService {
     @Transactional
     public void deleteVideo(UUID videoId, UUID userId) {
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Video not found: " + videoId));
         
         // Check ownership
         if (!video.getUserId().equals(userId)) {
-            throw new RuntimeException("Not authorized to delete this video");
+            throw new ForbiddenException("Not authorized to delete this video");
         }
         
         // Delete files
@@ -171,7 +176,7 @@ public class VideoService {
     @Transactional
     public VoteResponse voteOnVideo(UUID videoId, VoteRequest request, UUID userId, UUID sessionId) {
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Video not found: " + videoId));
         
         VoteDirection direction = VoteDirection.valueOf(request.getDirection().toUpperCase());
         
@@ -182,7 +187,7 @@ public class VideoService {
         } else if (sessionId != null) {
             existingVote = voteRepository.findBySessionIdAndVideoId(sessionId, videoId);
         } else {
-            throw new RuntimeException("Either userId or sessionId is required");
+            throw new BadRequestException("Either userId or sessionId is required");
         }
         
         Vote vote;
@@ -223,7 +228,7 @@ public class VideoService {
     @Transactional
     public ViewResponse recordView(UUID videoId, ViewRequest request, UUID userId) {
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Video not found: " + videoId));
         
         View view = View.builder()
                 .videoId(videoId)
@@ -241,7 +246,7 @@ public class VideoService {
     @Transactional
     public ShareResponse shareVideo(UUID videoId, ShareRequest request) {
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Video not found: " + videoId));
         
         UUID sharerSessionId = UUID.fromString(request.getSharerSessionId());
         
@@ -262,7 +267,7 @@ public class VideoService {
     @Transactional
     public ShareClickResponse trackShareClick(UUID videoId, ShareClickRequest request) {
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Video not found: " + videoId));
         
         UUID clickerSessionId = UUID.fromString(request.getClickerSessionId());
         
@@ -299,7 +304,7 @@ public class VideoService {
     @Transactional
     public void likeVideo(UUID videoId, UUID userId) {
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new RuntimeException("Video not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Video not found: " + videoId));
         
         if (!userLikedVideoRepository.existsByUserIdAndVideoId(userId, videoId)) {
             UserLikedVideo likedVideo = UserLikedVideo.builder()
