@@ -45,8 +45,10 @@ export const useVideosStore = defineStore('videos', {
         direction,
       }
       
-      // If not authenticated, include session_id
-      if (!authStore.isAuthenticated) {
+      // Always include session_id when available as a fallback
+      // This handles cases where the frontend thinks the user is authenticated
+      // but the backend treats the request as anonymous (e.g., expired/invalid token)
+      if (process.client) {
         const { useSession } = await import('~/composables/useSession')
         const { getOrCreateSessionId } = useSession()
         votePayload.session_id = getOrCreateSessionId()
