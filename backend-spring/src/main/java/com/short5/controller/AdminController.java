@@ -101,7 +101,14 @@ public class AdminController {
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int limit) {
         try {
-            ReportStatus reportStatus = status != null ? ReportStatus.valueOf(status.toUpperCase()) : null;
+            ReportStatus reportStatus = null;
+            if (status != null) {
+                try {
+                    reportStatus = ReportStatus.valueOf(status.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    return ResponseEntity.badRequest().build();
+                }
+            }
             Map<String, Object> reports = adminService.getReports(reportStatus, cursor, limit);
             return ResponseEntity.ok(reports);
         } catch (Exception e) {

@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/v1/auth/**",
                     "/api/v1/feed",
-                    "/api/v1/videos/{id}",
+                    "/api/v1/videos/*",
                     "/api/v1/videos/*/vote",      // Allow anonymous voting (PRD/RFC requirement)
                     "/api/v1/videos/*/view",       // Allow anonymous view tracking
                     "/health",
