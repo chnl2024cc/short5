@@ -51,7 +51,12 @@
     <video
       ref="videoElement"
       class="h-full object-cover cursor-pointer"
-      :class="{ 'opacity-0': isLoading || hasError }"
+      :class="{ 
+        'opacity-0': isLoading || hasError,
+        'swipe-animation-like': buttonSwipeAnimation === 'like',
+        'swipe-animation-not-like': buttonSwipeAnimation === 'not_like',
+        'swipe-animation-share': buttonSwipeAnimation === 'share'
+      }"
       :autoplay="isActive && !isLoading && !hasError"
       :loop="true"
       playsinline
@@ -78,7 +83,11 @@
     <!-- Swipe Overlay -->
     <div
       v-if="showOverlay"
-      :class="['swipe-overlay', overlayClass]"
+      :class="['swipe-overlay', overlayClass, {
+        'swipe-overlay-animate-like': buttonSwipeAnimation === 'like',
+        'swipe-overlay-animate-not-like': buttonSwipeAnimation === 'not_like',
+        'swipe-overlay-animate-share': buttonSwipeAnimation === 'share'
+      }]"
       :style="{ opacity: overlayOpacity }"
       @click.stop
     >
@@ -107,6 +116,47 @@
       </button>
     </div>
     
+    <!-- Action Buttons - Always visible for easy access -->
+    <div 
+      class="absolute bottom-0 left-0 right-2 flex items-center justify-center gap-16 z-35 action-buttons-container"
+    >
+      <!-- Not Like Button (Left) -->
+      <button
+        @click.stop="handleActionButtonClick('not_like')"
+        class="action-button action-button-not-like"
+        :aria-label="t('videoSwiper.nope')"
+        :title="t('videoSwiper.nope')"
+      >
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      <!-- Share Button (Center/Up) -->
+      <button
+        @click.stop="handleActionButtonClick('share')"
+        class="action-button action-button-share"
+        :aria-label="t('videoSwiper.share')"
+        :title="t('videoSwiper.share')"
+      >
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+        </svg>
+      </button>
+
+      <!-- Like Button (Right) -->
+      <button
+        @click.stop="handleActionButtonClick('like')"
+        class="action-button action-button-like"
+        :aria-label="t('videoSwiper.like')"
+        :title="t('videoSwiper.like')"
+      >
+        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+        </svg>
+      </button>
+    </div>
+
     <!-- Video Info Overlay -->
     <div 
       class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white z-30 video-info-overlay"
@@ -327,6 +377,44 @@ const handleShareButtonClick = async () => {
   await handleShare()
 }
 
+// Trigger swipe animation for button clicks
+const triggerButtonSwipeAnimation = (direction: 'like' | 'not_like' | 'share') => {
+  // Set the animation direction
+  buttonSwipeAnimation.value = direction
+  
+  // Animate: fade in, hold, fade out
+  // The overlay will show immediately with opacity 0.9 (from computed)
+  // After a delay, clear it to trigger fade out
+  setTimeout(() => {
+    buttonSwipeAnimation.value = null
+  }, 500) // Show for 500ms, then fade out (fade out handled by CSS transition)
+}
+
+// Handle action button clicks (Like, Not Like, Share)
+const handleActionButtonClick = async (direction: 'like' | 'not_like' | 'share') => {
+  // Dismiss hints on any action
+  if (showActionHint.value) {
+    dismissActionHint()
+  }
+  
+  // Trigger swipe animation to show users they can also swipe
+  triggerButtonSwipeAnimation(direction)
+  
+  // Wait for animation to complete (500ms) before executing action and switching to next video
+  // This ensures users see the full animation before the video disappears
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  if (direction === 'share') {
+    // Share doesn't remove video from feed
+    await handleShare()
+    emit('swiped', 'share')
+  } else {
+    // Like/Not Like - trigger vote and emit swipe event (this removes video and shows next)
+    videosStore.voteOnVideo(props.video.id, direction)
+    emit('swiped', direction)
+  }
+}
+
 // Report functionality
 const submitReport = async () => {
   if (reportSubmitting.value || reportSuccess.value) return
@@ -385,6 +473,12 @@ const retryDelay = 2000 // 2 seconds
 let retryTimeout: NodeJS.Timeout | null = null
 let bufferingTimeout: NodeJS.Timeout | null = null
 
+// Performance optimization: Throttle timeupdate emissions
+let lastViewUpdateTime = 0
+const VIEW_UPDATE_THROTTLE = 1000 // Emit viewUpdate once per second
+let rafGestureId: number | null = null // RequestAnimationFrame ID for gesture throttling
+let pendingGestureUpdate: (() => void) | null = null // Closure that captures the event
+
 // Swipe state
 const startX = ref(0)
 const startY = ref(0)
@@ -396,21 +490,36 @@ const touchStartTime = ref(0)
 // Track if a swipe occurred to prevent click events from firing
 const hasSwiped = ref(false)
 
+// Button-triggered swipe animation state
+const buttonSwipeAnimation = ref<'like' | 'not_like' | 'share' | null>(null)
+
 // Overlay state
-const showOverlay = computed(() => isDragging.value && swipeDirection.value !== null)
+const showOverlay = computed(() => {
+  // Show overlay during drag OR button animation
+  return (isDragging.value && swipeDirection.value !== null) || buttonSwipeAnimation.value !== null
+})
 const overlayClass = computed(() => {
-  if (swipeDirection.value === 'like') return 'like'
-  if (swipeDirection.value === 'not_like') return 'not-like'
-  if (swipeDirection.value === 'share') return 'share'
+  // Use button animation direction if active, otherwise use drag direction
+  const direction = buttonSwipeAnimation.value || swipeDirection.value
+  if (direction === 'like') return 'like'
+  if (direction === 'not_like') return 'not-like'
+  if (direction === 'share') return 'share'
   return ''
 })
 const overlayText = computed(() => {
-  if (swipeDirection.value === 'like') return t('videoSwiper.like')
-  if (swipeDirection.value === 'not_like') return t('videoSwiper.nope')
-  if (swipeDirection.value === 'share') return t('videoSwiper.share')
+  // Use button animation direction if active, otherwise use drag direction
+  const direction = buttonSwipeAnimation.value || swipeDirection.value
+  if (direction === 'like') return t('videoSwiper.like')
+  if (direction === 'not_like') return t('videoSwiper.nope')
+  if (direction === 'share') return t('videoSwiper.share')
   return ''
 })
 const overlayOpacity = computed(() => {
+  // If button animation is active, show full opacity
+  if (buttonSwipeAnimation.value !== null) {
+    return 0.9
+  }
+  // Otherwise, use drag-based opacity
   if (!isDragging.value) return 0
   if (swipeDirection.value === 'share') {
     const distance = Math.abs(currentY.value - startY.value)
@@ -473,10 +582,10 @@ const startGesture = (e: TouchEvent | MouseEvent) => {
 }
 
 /**
- * Update gesture during movement
+ * Update gesture during movement (internal - processes gesture)
  * Calculates direction and prevents default scrolling for swipes
  */
-const updateGesture = (e: TouchEvent | MouseEvent) => {
+const processGestureUpdate = (e: TouchEvent | MouseEvent) => {
   if (!isDragging.value) return
   
   const coords = getEventCoordinates(e)
@@ -498,11 +607,39 @@ const updateGesture = (e: TouchEvent | MouseEvent) => {
     swipeDirection.value = deltaX > 0 ? 'like' : 'not_like'
   }
   
-  // Prevent default scrolling for swipes (critical for iOS Safari)
+  // Clear RAF ID after processing
+  rafGestureId = null
+  pendingGestureUpdate = null
+}
+
+/**
+ * Update gesture during movement (throttled with RAF)
+ * Uses requestAnimationFrame to throttle updates to ~60fps max
+ */
+const updateGesture = (e: TouchEvent | MouseEvent) => {
+  if (!isDragging.value) return
+  
+  // Always prevent default immediately for touch events (required for iOS Safari)
+  // This must happen synchronously, not in RAF
   if (e instanceof TouchEvent && e.touches.length === 1) {
-    if (absDeltaX > 10 || absDeltaY > 10) {
+    const coords = getEventCoordinates(e)
+    const deltaX = Math.abs(coords.x - startX.value)
+    const deltaY = Math.abs(coords.y - startY.value)
+    if (deltaX > 10 || deltaY > 10) {
       e.preventDefault()
     }
+  }
+  
+  // Store the event for processing in RAF
+  pendingGestureUpdate = () => processGestureUpdate(e)
+  
+  // Schedule update via RAF if not already scheduled
+  if (rafGestureId === null) {
+    rafGestureId = requestAnimationFrame(() => {
+      if (pendingGestureUpdate) {
+        pendingGestureUpdate()
+      }
+    })
   }
 }
 
@@ -774,6 +911,7 @@ const cleanupVideo = () => {
   // Reset loop tracking
   videoLoopCount.value = 0
   lastVideoTime.value = 0
+  lastViewUpdateTime = 0
   // Reset share button state for new video
   showShareButton.value = false
   shareButtonDismissed.value = false
@@ -789,6 +927,13 @@ const cleanupVideo = () => {
   if (clickTimeout) {
     clearTimeout(clickTimeout)
     clickTimeout = null
+  }
+  
+  // Cancel pending RAF gesture update
+  if (rafGestureId !== null) {
+    cancelAnimationFrame(rafGestureId)
+    rafGestureId = null
+    pendingGestureUpdate = null
   }
   
   // Clean up video element
@@ -863,14 +1008,12 @@ const onVideoError = (event: Event) => {
 
 const onTimeUpdate = () => {
   if (videoElement.value && props.isActive) {
-    const seconds = Math.floor(videoElement.value.currentTime)
-    emit('viewUpdate', seconds)
-    
-    // Detect video loop by checking if currentTime resets to near 0
     const currentTime = videoElement.value.currentTime
     const duration = videoElement.value.duration
+    const now = Date.now()
     
-    // If we were near the end and now we're near the start, video looped
+    // Detect video loop by checking if currentTime resets to near 0
+    // This check runs every timeupdate to ensure we catch loops accurately
     if (duration > 0 && lastVideoTime.value > duration * 0.9 && currentTime < duration * 0.1) {
       videoLoopCount.value++
       
@@ -888,6 +1031,14 @@ const onTimeUpdate = () => {
           }, 2000) // Show 2 seconds after loop (1.5s after action hint)
         }
       }
+    }
+    
+    // Throttle viewUpdate emissions to once per second (reduces parent component updates)
+    // Loop detection still runs every frame to ensure accuracy
+    if (now - lastViewUpdateTime >= VIEW_UPDATE_THROTTLE) {
+      const seconds = Math.floor(currentTime)
+      emit('viewUpdate', seconds)
+      lastViewUpdateTime = now
     }
     
     lastVideoTime.value = currentTime
@@ -998,6 +1149,215 @@ onUnmounted(() => {
   transform: rotate(-5deg);
 }
 
+/* Video swipe animations - makes video completely swipe away in swipe direction */
+.swipe-animation-like {
+  animation: swipeRight 0.5s ease-out forwards;
+}
+
+.swipe-animation-not-like {
+  animation: swipeLeft 0.5s ease-out forwards;
+}
+
+.swipe-animation-share {
+  animation: swipeUp 0.5s ease-out forwards;
+}
+
+@keyframes swipeRight {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(10%) rotate(5deg);
+    opacity: 1;
+  }
+  60% {
+    transform: translateX(30%) rotate(10deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%) rotate(15deg);
+    opacity: 0;
+  }
+}
+
+@keyframes swipeLeft {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(-10%) rotate(-5deg);
+    opacity: 1;
+  }
+  60% {
+    transform: translateX(-30%) rotate(-10deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-100%) rotate(-15deg);
+    opacity: 0;
+  }
+}
+
+@keyframes swipeUp {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(-10%) rotate(-2deg);
+    opacity: 1;
+  }
+  60% {
+    transform: translateY(-30%) rotate(-3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100%) rotate(-5deg);
+    opacity: 0;
+  }
+}
+
+/* Overlay animations - slides in then swipes away with video */
+.swipe-overlay-animate-like {
+  animation: overlaySwipeRight 0.5s ease-out forwards;
+}
+
+.swipe-overlay-animate-not-like {
+  animation: overlaySwipeLeft 0.5s ease-out forwards;
+}
+
+.swipe-overlay-animate-share {
+  animation: overlaySwipeUp 0.5s ease-out forwards;
+}
+
+.swipe-overlay-animate-like .swipe-overlay-text {
+  animation: textSlideInFromRight 0.3s ease-out;
+}
+
+.swipe-overlay-animate-not-like .swipe-overlay-text {
+  animation: textSlideInFromLeft 0.3s ease-out;
+}
+
+.swipe-overlay-animate-share .swipe-overlay-text {
+  animation: textSlideInFromTop 0.3s ease-out;
+}
+
+@keyframes overlaySwipeRight {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 0.9;
+  }
+  30% {
+    transform: translateX(10%) rotate(5deg);
+    opacity: 0.9;
+  }
+  60% {
+    transform: translateX(30%) rotate(10deg);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(100%) rotate(15deg);
+    opacity: 0;
+  }
+}
+
+@keyframes overlaySwipeLeft {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 0.9;
+  }
+  30% {
+    transform: translateX(-10%) rotate(-5deg);
+    opacity: 0.9;
+  }
+  60% {
+    transform: translateX(-30%) rotate(-10deg);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(-100%) rotate(-15deg);
+    opacity: 0;
+  }
+}
+
+@keyframes overlaySwipeUp {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.9;
+  }
+  30% {
+    transform: translateY(-10%) rotate(-2deg);
+    opacity: 0.9;
+  }
+  60% {
+    transform: translateY(-30%) rotate(-3deg);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-100%) rotate(-5deg);
+    opacity: 0;
+  }
+}
+
+@keyframes textSlideInFromRight {
+  0% {
+    transform: translateX(50px) rotate(-5deg);
+    opacity: 0;
+  }
+  20% {
+    transform: translateX(0) rotate(-5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) rotate(-5deg);
+    opacity: 1;
+  }
+}
+
+@keyframes textSlideInFromLeft {
+  0% {
+    transform: translateX(-50px) rotate(-5deg);
+    opacity: 0;
+  }
+  20% {
+    transform: translateX(0) rotate(-5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) rotate(-5deg);
+    opacity: 1;
+  }
+}
+
+@keyframes textSlideInFromTop {
+  0% {
+    transform: translateY(-50px) rotate(-5deg);
+    opacity: 0;
+  }
+  20% {
+    transform: translateY(0) rotate(-5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) rotate(-5deg);
+    opacity: 1;
+  }
+}
+
 .loading-spinner {
   @apply w-12 h-12 border-4 border-white/20 border-t-white rounded-full;
   animation: spin 1s linear infinite;
@@ -1045,7 +1405,7 @@ onUnmounted(() => {
 
 .prominent-share-button {
   position: absolute;
-  bottom: 6rem;
+  bottom: 18rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 40;
@@ -1066,6 +1426,8 @@ onUnmounted(() => {
   animation: shareButtonPulse 2s ease-in-out infinite, shareButtonFloat 3s ease-in-out infinite;
   min-width: 280px;
   max-width: 90%;
+  /* Performance optimization: hint browser to optimize transforms */
+  will-change: transform, box-shadow;
 }
 
 .prominent-share-button:hover {
@@ -1099,6 +1461,8 @@ onUnmounted(() => {
   border-radius: 50%;
   backdrop-filter: blur(10px);
   animation: iconRotate 3s ease-in-out infinite;
+  /* Performance optimization: hint browser to optimize transforms */
+  will-change: transform;
 }
 
 .share-button-icon svg {
@@ -1141,6 +1505,8 @@ onUnmounted(() => {
   animation: glowPulse 2s ease-in-out infinite;
   z-index: 1;
   filter: blur(8px);
+  /* Performance optimization: hint browser to optimize opacity/transform */
+  will-change: opacity, transform;
 }
 
 @keyframes shareButtonPulse {
@@ -1222,13 +1588,128 @@ onUnmounted(() => {
   transform: translateX(-50%) translateY(-10px) scale(0.9);
 }
 
+/* ============================================================================
+   ACTION BUTTONS - Always visible Like/Not Like/Share buttons
+   ============================================================================ */
+
+.action-buttons-container {
+  pointer-events: none; /* Allow clicks to pass through container, but buttons are clickable */
+  padding-bottom: max(calc(10rem + env(safe-area-inset-bottom)), 10rem);
+}
+
+.action-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+  pointer-events: auto; /* Make buttons clickable */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
+/* Active/pressed state - works on touch screens */
+.action-button:active {
+  transform: scale(0.85);
+  transition: transform 0.1s ease-out;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Focus state for keyboard navigation (desktop) */
+.action-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 2px;
+}
+
+/* Hover only on devices with pointer (desktop with mouse) */
+@media (hover: hover) and (pointer: fine) {
+  .action-button:hover {
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 
+      0 6px 16px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  }
+
+  .action-button-not-like:hover {
+    background: rgba(239, 68, 68, 0.5);
+    box-shadow: 
+      0 6px 16px rgba(239, 68, 68, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  }
+
+  .action-button-share:hover {
+    background: rgba(59, 130, 246, 0.5);
+    box-shadow: 
+      0 6px 16px rgba(59, 130, 246, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  }
+
+  .action-button-like:hover {
+    background: rgba(34, 197, 94, 0.5);
+    box-shadow: 
+      0 6px 16px rgba(34, 197, 94, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  }
+}
+
+/* Not Like Button (Red/X) */
+.action-button-not-like {
+  background: rgba(239, 68, 68, 0.35); /* red-500 with more transparency */
+  color: white;
+}
+
+.action-button-not-like:active {
+  background: rgba(239, 68, 68, 0.6);
+  box-shadow: 
+    0 4px 12px rgba(239, 68, 68, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+}
+
+/* Share Button (Blue) */
+.action-button-share {
+  background: rgba(59, 130, 246, 0.35); /* blue-500 with more transparency */
+  color: white;
+}
+
+.action-button-share:active {
+  background: rgba(59, 130, 246, 0.6);
+  box-shadow: 
+    0 4px 12px rgba(59, 130, 246, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+}
+
+/* Like Button (Green - Heart) */
+.action-button-like {
+  background: rgba(34, 197, 94, 0.35); /* green-500 with more transparency */
+  color: white;
+  width: 64px; /* Bigger than other buttons */
+  height: 64px; /* Bigger than other buttons */
+}
+
+.action-button-like:active {
+  background: rgba(34, 197, 94, 0.55);
+  transform: scale(0.9); /* Slightly different scale for visual feedback */
+  box-shadow: 
+    0 4px 12px rgba(34, 197, 94, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+}
+
 /* Mobile optimizations */
 @media (max-width: 640px) {
   .prominent-share-button {
-    bottom: 5rem;
     padding: 1rem 1.5rem;
-    /* min-width: 280px; */
     border-radius: 1.25rem;
+    min-width: 320px; /* Wider on mobile */
   }
 
   .share-button-icon {
@@ -1252,10 +1733,8 @@ onUnmounted(() => {
 
 @media (max-width: 480px) {
   .prominent-share-button {
-    bottom: 4.5rem;
-    padding: 0.875rem 1.25rem;
-    /* min-width: 280px; */
-    max-width: 85%;
+    min-width: 300px; /* Wider on small mobile */
+    max-width: 90%; /* Increased from 85% to make it wider */
   }
 
   .share-button-content {
