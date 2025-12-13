@@ -19,6 +19,7 @@ from app.models.vote import Vote, VoteDirection
 from app.models.view import View
 from app.models.share import ShareLink
 from app.models.share_click import ShareClick
+from app.models.ad_click import AdClick
 from app.models.user_liked_video import UserLikedVideo
 from app.schemas.video import (
     VideoResponse,
@@ -32,6 +33,8 @@ from app.schemas.video import (
     ShareResponse,
     ShareClickRequest,
     ShareClickResponse,
+    AdClickRequest,
+    AdClickResponse,
 )
 from app.celery_app import celery_app
 from app.services.video_deletion import video_deletion_service
@@ -82,6 +85,7 @@ async def get_video(
         url_mp4=video.url_mp4,
         duration_seconds=video.duration_seconds,
         error_reason=video.error_reason,
+        ad_link=video.ad_link,
         user=UserBasic(id=str(user.id), username=user.username),
         stats=VideoStats(
             likes=likes_count.scalar() or 0,
@@ -108,10 +112,34 @@ async def upload_video(
     file: UploadFile = File(...),
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
+    ad_link: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload a video file"""
+    # Validate ad_link - only admins can set it
+    if ad_link and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can set ad_link",
+        )
+    
+    # Validate URL format if ad_link is provided
+    if ad_link:
+        from urllib.parse import urlparse
+        try:
+            result = urlparse(ad_link)
+            if not all([result.scheme, result.netloc]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid URL format for ad_link",
+                )
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid URL format for ad_link",
+            )
+    
     # Validate file extension
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in settings.ALLOWED_VIDEO_FORMATS:
@@ -135,6 +163,7 @@ async def upload_video(
         user_id=current_user.id,
         title=title,
         description=description,
+        ad_link=ad_link if current_user.is_admin else None,  # Only set if admin
         status=VideoStatus.UPLOADING,
         file_size_bytes=file_size,
         original_filename=file.filename,
@@ -350,6 +379,13 @@ async def vote_on_video(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Video not found",
+        )
+    
+    # Prevent ALL votes (like and not_like) on ad videos
+    if video.ad_link:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ad videos cannot be voted on (liked or not liked)",
         )
     
     # Determine new direction
@@ -752,6 +788,63 @@ async def record_share_click(
     
     return ShareClickResponse(
         message="Share click recorded",
+        video_id=str(video.id)
+    )
+
+
+@router.post("/{video_id}/ad/click", response_model=AdClickResponse)
+async def record_ad_click(
+    video_id: str,
+    click_data: AdClickRequest,
+    current_user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record ad video link click event
+    
+    Creates a new click record when someone clicks on an ad video link.
+    Allows tracking multiple clicks per ad video.
+    - clicker_session_id: Who clicked the link (optional for anonymous users)
+    - user_id: Set automatically if user is authenticated
+    - clicked_at: Timestamp when link was clicked
+    """
+    # Check if video exists and has ad_link
+    result = await db.execute(select(Video).where(Video.id == video_id))
+    video = result.scalar_one_or_none()
+    
+    if not video:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Video not found",
+        )
+    
+    if not video.ad_link:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This video does not have an ad link",
+        )
+    
+    # Get session_id - use provided or get from current user session
+    clicker_session_id = None
+    if click_data.clicker_session_id:
+        try:
+            clicker_session_id = uuid.UUID(click_data.clicker_session_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid session_id format",
+            )
+    
+    # Create click record
+    ad_click = AdClick(
+        video_id=video.id,
+        clicker_session_id=clicker_session_id,
+        user_id=current_user.id if current_user else None,
+    )
+    db.add(ad_click)
+    await db.commit()
+    
+    return AdClickResponse(
+        message="Ad click recorded",
         video_id=str(video.id)
     )
 

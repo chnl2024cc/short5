@@ -117,7 +117,9 @@
     </div>
     
     <!-- Action Buttons - Always visible for easy access -->
+    <!-- Action Buttons - HIDDEN for ad videos (users can only click to open ad link) -->
     <div 
+      v-if="!isAdVideo"
       class="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-16 z-35 action-buttons-container"
     >
       <!-- Not Like Button (Left) -->
@@ -157,18 +159,68 @@
       </button>
     </div>
 
+    <!-- Ad Skip Timer Overlay (Netflix/YouTube style) - Countdown -->
+    <div
+      v-if="isAdVideo && !canSkipAd"
+      class="absolute top-20 right-4 z-50"
+    >
+      <button
+        class="bg-black/90 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-black transition-colors"
+        disabled
+      >
+        <span class="text-sm font-medium">{{ t('videoSwiper.skipAd') }}</span>
+        <span class="bg-white/20 px-2 py-1 rounded text-xs font-bold">
+          {{ adSkipTimeRemaining }}
+        </span>
+      </button>
+    </div>
+
+    <!-- Ad Skip Button - Appears after 5 seconds -->
+    <div
+      v-if="isAdVideo && canSkipAd"
+      class="absolute top-20 right-4 z-50"
+    >
+      <button
+        @click.stop="handleSkipAd"
+        class="bg-black/90 hover:bg-black/80 active:bg-black text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+      >
+        <span class="text-sm font-medium">{{ t('videoSwiper.skipAd') }}</span>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+
     <!-- Video Info Overlay -->
     <div 
       class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white z-30 video-info-overlay"
     >
-      <h3 v-if="video.title && video.title.trim() !== '' && video.title.toLowerCase() !== 'untitled'" class="font-bold text-lg">
+      <!-- Title as link for ad videos -->
+      <a
+        v-if="isAdVideo && video.ad_link"
+        :href="video.ad_link"
+        target="_blank"
+        rel="noopener noreferrer"
+        @click.stop="trackAdClick"
+        class="font-bold text-lg hover:text-blue-400 underline cursor-pointer transition-colors block mb-2"
+      >
+        {{ video.title || 'Untitled' }}
+      </a>
+      <!-- Regular title for non-ad videos -->
+      <h3
+        v-else-if="video.title && video.title.trim() !== '' && video.title.toLowerCase() !== 'untitled'"
+        class="font-bold text-lg mb-2"
+      >
         {{ video.title }}
       </h3>
       <p class="text-sm">{{ video.user?.username }}</p>
       <div class="flex gap-4 mt-2 text-sm items-center">
-        <span>❤️ {{ video.stats?.likes || 0 }}</span>
+        <!-- Like count - HIDDEN for ad videos -->
+        <span v-if="!isAdVideo">❤️ {{ video.stats?.likes || 0 }}</span>
         <span>👁️ {{ video.stats?.views || 0 }}</span>
+        <!-- Share Button - HIDDEN for ad videos -->
         <button
+          v-if="!isAdVideo"
           @click.stop="handleShare"
           class="flex items-center gap-1 px-3 py-1.5 bg-black/60 hover:bg-black/80 active:bg-black/90 rounded-lg transition-colors touch-manipulation"
           :title="t('videoSwiper.shareButton')"
@@ -178,6 +230,21 @@
           </svg>
           <span class="font-medium">{{ t('videoSwiper.shareButton') }}</span>
         </button>
+        <!-- Go to Offer Button - Only for ad videos -->
+        <a
+          v-if="isAdVideo && video.ad_link"
+          :href="video.ad_link"
+          target="_blank"
+          rel="noopener noreferrer"
+          @click.stop="trackAdClick"
+          class="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg transition-colors touch-manipulation font-semibold"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          <span>{{ t('videoSwiper.goToOffer') }}</span>
+        </a>
+        
         <button
           v-if="authStore.isAuthenticated"
           @click.stop="showReportDialog = true"
@@ -340,6 +407,12 @@ const shareButtonDismissed = ref(false)
 // Share notification state
 const showShareNotification = ref(false)
 
+// Ad video state
+const isAdVideo = computed(() => !!props.video.ad_link)
+const adSkipTimeRemaining = ref(5) // seconds
+const canSkipAd = ref(false)
+let adSkipInterval: NodeJS.Timeout | null = null
+
 // Report dialog state
 const showReportDialog = ref(false)
 const reportReason = ref('')
@@ -377,6 +450,39 @@ const handleShareButtonClick = async () => {
   await handleShare()
 }
 
+// Track ad click
+const trackAdClick = async () => {
+  if (!isAdVideo.value || !props.video.ad_link) return
+  if (!process.client) return
+  
+  try {
+    // Get clicker's session_id
+    const { useSession } = await import('~/composables/useSession')
+    const { getOrCreateSessionId } = useSession()
+    const clickerId = getOrCreateSessionId()
+    
+    // Track ad click
+    const clickPayload: { clicker_session_id?: string } = {
+      clicker_session_id: clickerId,
+    }
+    
+    await api.post(`/videos/${props.video.id}/ad/click`, clickPayload)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Tracked ad click for video ${props.video.id}`)
+    }
+  } catch (error) {
+    // Don't block user experience if ad tracking fails
+    console.warn('Failed to track ad click:', error)
+  }
+}
+
+// Handle skip ad button click - skips to next video without recording vote
+const handleSkipAd = () => {
+  if (!isAdVideo.value || !canSkipAd.value) return
+  // Emit swipe event to skip to next video (use 'not_like' direction, but no vote will be recorded)
+  emit('swiped', 'not_like')
+}
+
 // Trigger swipe animation for button clicks
 const triggerButtonSwipeAnimation = (direction: 'like' | 'not_like' | 'share') => {
   // Set the animation direction
@@ -392,6 +498,11 @@ const triggerButtonSwipeAnimation = (direction: 'like' | 'not_like' | 'share') =
 
 // Handle action button clicks (Like, Not Like, Share)
 const handleActionButtonClick = async (direction: 'like' | 'not_like' | 'share') => {
+  // Prevent ALL actions on ad videos (no interactions allowed at all)
+  if (isAdVideo.value) {
+    return // Don't allow any interactions with ad videos
+  }
+  
   // Dismiss hints on any action
   if (showActionHint.value) {
     dismissActionHint()
@@ -592,6 +703,15 @@ const processGestureUpdate = (e: TouchEvent | MouseEvent) => {
   currentX.value = coords.x
   currentY.value = coords.y
   
+  // Prevent swipe direction detection on ad videos during first 5 seconds
+  if (isAdVideo.value && !canSkipAd.value) {
+    swipeDirection.value = null
+    // Clear RAF ID after processing
+    rafGestureId = null
+    pendingGestureUpdate = null
+    return
+  }
+  
   const deltaX = currentX.value - startX.value
   const deltaY = currentY.value - startY.value
   const absDeltaX = Math.abs(deltaX)
@@ -650,6 +770,14 @@ const updateGesture = (e: TouchEvent | MouseEvent) => {
 const endGesture = (e?: TouchEvent) => {
   if (!isDragging.value) return
   
+  // Prevent swipe if ad video and skip time hasn't elapsed
+  if (isAdVideo.value && !canSkipAd.value) {
+    // Don't process swipe - user must wait for skip timer
+    isDragging.value = false
+    swipeDirection.value = null
+    return
+  }
+  
   // Update final coordinates from touch end event (iOS Safari)
   if (e?.changedTouches?.[0]) {
     const touch = e.changedTouches[0]
@@ -685,12 +813,37 @@ const endGesture = (e?: TouchEvent) => {
   
   // Handle gestures
   if (isUpwardSwipe) {
+    // Prevent ALL swipes on ad videos (share is not allowed)
+    if (isAdVideo.value) {
+      // Don't process share swipe on ad videos - no interactions allowed
+      isDragging.value = false
+      swipeDirection.value = null
+      return
+    }
     // Upward swipe = Share (preserves user gesture context for iOS Safari)
     handleShare()
     emit('swiped', 'share')
   } else if (isHorizontalSwipe && swipeDirection.value) {
     // Horizontal swipe = Like/Not Like
     const swipeDir = swipeDirection.value as 'like' | 'not_like'
+    
+    // Prevent ALL swipes on ad videos during first 5 seconds
+    if (isAdVideo.value && !canSkipAd.value) {
+      // Don't process swipe - user must wait for skip timer
+      isDragging.value = false
+      swipeDirection.value = null
+      return
+    }
+    
+    // For ad videos after 5 seconds: allow skip to next video but don't record vote
+    if (isAdVideo.value) {
+      // Skip to next video without recording any interaction/vote
+      emit('swiped', swipeDir)
+      // Don't call voteOnVideo - we're just skipping, not interacting with the ad
+      return
+    }
+    
+    // Normal video: record vote and emit swipe
     emit('swiped', swipeDir)
     videosStore.voteOnVideo(props.video.id, swipeDir)
   } else if (isTap) {
@@ -742,6 +895,16 @@ const handleContainerClick = (e: MouseEvent) => {
   if (hasSwiped.value || isDragging.value) {
     e.preventDefault()
     e.stopPropagation()
+    return
+  }
+  
+  // If ad video, open ad link instead of toggling play/pause
+  if (isAdVideo.value && props.video.ad_link) {
+    e.preventDefault()
+    e.stopPropagation()
+    // Track ad click before opening link
+    trackAdClick()
+    window.open(props.video.ad_link, '_blank', 'noopener,noreferrer')
     return
   }
   
@@ -1081,6 +1244,35 @@ const onVideoPlay = () => {
 }
 
 
+// Watch for ad video and initialize skip timer
+watch(() => [props.video.ad_link, props.isActive], ([adLink, isActive]) => {
+  if (adLink && isActive) {
+    // Reset skip timer when ad video becomes active
+    canSkipAd.value = false
+    adSkipTimeRemaining.value = 5
+    
+    // Start countdown
+    if (adSkipInterval) clearInterval(adSkipInterval)
+    adSkipInterval = setInterval(() => {
+      adSkipTimeRemaining.value--
+      if (adSkipTimeRemaining.value <= 0) {
+        canSkipAd.value = true
+        if (adSkipInterval) {
+          clearInterval(adSkipInterval)
+          adSkipInterval = null
+        }
+      }
+    }, 1000)
+  } else {
+    // Clean up interval
+    if (adSkipInterval) {
+      clearInterval(adSkipInterval)
+      adSkipInterval = null
+    }
+    canSkipAd.value = true
+  }
+})
+
 onMounted(() => {
   if (process.client) {
     nextTick(() => {
@@ -1099,6 +1291,11 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  // Cleanup ad skip interval
+  if (adSkipInterval) {
+    clearInterval(adSkipInterval)
+    adSkipInterval = null
+  }
   // Remove touch event listeners
   const container = swipeContainer.value
   if (container && process.client) {

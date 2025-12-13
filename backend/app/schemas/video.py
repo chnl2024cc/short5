@@ -20,6 +20,7 @@ class VideoStatus(str, Enum):
 class VideoBase(BaseModel):
     title: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
+    ad_link: Optional[str] = Field(None, description="External ad link (admin only)")
 
 
 class VideoCreate(VideoBase):
@@ -48,6 +49,7 @@ class VideoResponse(VideoBase):
     url_mp4: Optional[str] = None  # MP4 format - works in all modern browsers
     duration_seconds: Optional[int] = None
     error_reason: Optional[str] = None  # Error message if video failed
+    ad_link: Optional[str] = None  # External ad link (included from VideoBase)
     user: UserBasic
     stats: VideoStats
     created_at: datetime
@@ -95,6 +97,10 @@ class ShareClickResponse(BaseModel):
     video_id: str
 
 
-class ShareClickResponse(BaseModel):
+class AdClickRequest(BaseModel):
+    clicker_session_id: Optional[str] = None  # Who clicked the link (optional for anonymous)
+
+
+class AdClickResponse(BaseModel):
     message: str
     video_id: str

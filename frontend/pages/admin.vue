@@ -346,6 +346,159 @@
           </div>
         </div>
 
+        <!-- Ad Analytics Tab -->
+        <div v-else-if="activeTab === 'adAnalytics'" class="space-y-6">
+          <div class="flex items-center justify-between flex-wrap gap-4">
+            <h2 class="text-xl font-bold">Ad Analytics</h2>
+            <div class="flex items-center gap-4">
+              <select
+                v-model="adAnalyticsPeriod"
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="day">Daily</option>
+                <option value="week">Weekly</option>
+              </select>
+              <select
+                v-model="adAnalyticsDays"
+                class="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option :value="7">Last 7 days</option>
+                <option :value="14">Last 14 days</option>
+                <option :value="30">Last 30 days</option>
+                <option :value="60">Last 60 days</option>
+                <option :value="90">Last 90 days</option>
+              </select>
+              <button
+                @click="loadAdAnalytics"
+                :disabled="adAnalyticsLoading"
+                class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                {{ adAnalyticsLoading ? 'Loading...' : 'Refresh' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="adAnalyticsLoading && !adAnalyticsData" class="text-center py-8 text-gray-400">
+            Loading ad analytics...
+          </div>
+
+          <!-- Summary Cards -->
+          <div v-if="adAnalyticsData" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Total Clicks</div>
+              <div class="text-2xl font-bold">{{ adAnalyticsData.totals?.clicks?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Total Views</div>
+              <div class="text-2xl font-bold">{{ adAnalyticsData.totals?.views?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Unique Clickers</div>
+              <div class="text-2xl font-bold">{{ adAnalyticsData.totals?.unique_clickers?.toLocaleString() || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Auth Clickers</div>
+              <div class="text-2xl font-bold">{{ adAnalyticsData.totals?.unique_auth_clickers?.toLocaleString() || 0 }}</div>
+            </div>
+          </div>
+
+          <!-- Metrics Cards -->
+          <div v-if="adAnalyticsData" class="grid grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Click-Through Rate</div>
+              <div class="text-2xl font-bold text-blue-400">{{ adAnalyticsData.metrics?.click_through_rate || 0 }}%</div>
+              <div class="text-xs text-gray-500 mt-1">Clicks per 100 views</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Avg Clicks/View</div>
+              <div class="text-2xl font-bold">{{ adAnalyticsData.metrics?.avg_clicks_per_view || 0 }}</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+              <div class="text-sm text-gray-400 mb-1">Avg Clicks/Clicker</div>
+              <div class="text-2xl font-bold">{{ adAnalyticsData.metrics?.avg_clicks_per_clicker || 0 }}</div>
+            </div>
+          </div>
+
+          <!-- Time Series Charts -->
+          <div v-if="adAnalyticsData && (adAnalyticsData.clicks_over_time || adAnalyticsData.views_over_time)" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <!-- Clicks Over Time -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Clicks Over Time</h3>
+              <div class="space-y-2 max-h-64 overflow-y-auto">
+                <div
+                  v-for="item in adAnalyticsData.clicks_over_time"
+                  :key="item.date"
+                  class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+                >
+                  <span class="text-sm text-gray-300">{{ formatAnalyticsDate(item.date, adAnalyticsPeriod) }}</span>
+                  <span class="text-sm font-bold text-green-400">{{ item.clicks || 0 }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Views Over Time -->
+            <div class="bg-gray-900 rounded-lg p-6">
+              <h3 class="text-lg font-bold mb-4">Views Over Time</h3>
+              <div class="space-y-2 max-h-64 overflow-y-auto">
+                <div
+                  v-for="item in adAnalyticsData.views_over_time"
+                  :key="item.date"
+                  class="flex items-center justify-between p-2 hover:bg-gray-800 rounded"
+                >
+                  <span class="text-sm text-gray-300">{{ formatAnalyticsDate(item.date, adAnalyticsPeriod) }}</span>
+                  <span class="text-sm font-bold text-blue-400">{{ item.views || 0 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Performing Ad Videos -->
+          <div v-if="adAnalyticsData && adAnalyticsData.top_videos" class="bg-gray-900 rounded-lg p-6 mt-6">
+            <h3 class="text-lg font-bold mb-4">Top Performing Ad Videos</h3>
+            <div v-if="adAnalyticsData.top_videos && adAnalyticsData.top_videos.length > 0" class="space-y-3">
+              <div
+                v-for="(video, index) in adAnalyticsData.top_videos"
+                :key="video.id"
+                class="p-3 bg-gray-800 rounded hover:bg-gray-700 transition-colors"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="text-gray-500 text-sm">#{{ index + 1 }}</span>
+                      <h4 class="font-semibold truncate">{{ video.title || 'Untitled' }}</h4>
+                    </div>
+                    <p class="text-sm text-gray-400">by @{{ video.user?.username || 'Unknown' }}</p>
+                  </div>
+                  <div class="flex items-center gap-4 text-sm">
+                    <div class="text-center">
+                      <div class="text-gray-400 text-xs">Clicks</div>
+                      <div class="font-bold text-green-400">{{ video.clicks || 0 }}</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-gray-400 text-xs">Views</div>
+                      <div class="font-bold text-blue-400">{{ video.views || 0 }}</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-gray-400 text-xs">CTR</div>
+                      <div class="font-bold text-yellow-400">{{ video.ctr?.toFixed(2) || 0 }}%</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="text-center py-8 text-gray-400">
+              No ad video data available
+            </div>
+          </div>
+
+          <div v-else-if="!adAnalyticsLoading && adAnalyticsData && (!adAnalyticsData.totals || adAnalyticsData.totals.clicks === 0)" class="bg-gray-900 rounded-lg p-12 text-center">
+            <div class="text-6xl mb-4">📢</div>
+            <h4 class="text-xl font-bold mb-2">No Ad Data</h4>
+            <p class="text-gray-400">No ad analytics data available for the selected period.</p>
+          </div>
+        </div>
+
         <!-- Visitor Analytics Tab -->
         <div v-else-if="activeTab === 'visitorAnalytics'" class="space-y-6">
           <div class="flex items-center justify-between flex-wrap gap-4">
@@ -1441,6 +1594,7 @@ const tabs = [
   { id: 'stats', label: t('admin.tabs.overview') || 'Overview' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'shareAnalytics', label: 'Share Analytics' },
+  { id: 'adAnalytics', label: 'Ad Analytics' },
   { id: 'visitorAnalytics', label: 'Visitor Analytics' },
   { id: 'videos', label: t('admin.tabs.pendingVideos') || 'Pending Videos' },
   { id: 'allVideos', label: t('admin.tabs.allVideos') || 'All Videos' },
@@ -1491,6 +1645,12 @@ const shareAnalyticsLoading = ref(false)
 const shareAnalyticsPeriod = ref<'day' | 'week'>('week')
 const shareAnalyticsDays = ref(30)
 const shareAnalyticsData = ref<any | null>(null)
+
+// Ad Analytics
+const adAnalyticsLoading = ref(false)
+const adAnalyticsPeriod = ref<'day' | 'week'>('week')
+const adAnalyticsDays = ref(30)
+const adAnalyticsData = ref<any | null>(null)
 
 // Visitor Analytics
 const visitorAnalyticsData = ref<any | null>(null)
@@ -1660,6 +1820,43 @@ const loadShareAnalytics = async () => {
     error.value = err.message || 'Failed to load share analytics'
   } finally {
     shareAnalyticsLoading.value = false
+  }
+}
+
+const loadAdAnalytics = async () => {
+  adAnalyticsLoading.value = true
+  try {
+    const response = await api.get<{
+      period: string
+      days: number
+      totals: {
+        clicks: number
+        views: number
+        unique_clickers: number
+        unique_auth_clickers: number
+      }
+      metrics: {
+        click_through_rate: number
+        avg_clicks_per_view: number
+        avg_clicks_per_clicker: number
+      }
+      clicks_over_time: Array<{ date: string; clicks: number }>
+      views_over_time: Array<{ date: string; views: number }>
+      top_videos: Array<{
+        id: string
+        title: string
+        user: { id: string; username: string }
+        clicks: number
+        views: number
+        ctr: number
+      }>
+    }>(`/admin/ads/analytics?period=${adAnalyticsPeriod.value}&days=${adAnalyticsDays.value}`)
+    adAnalyticsData.value = response
+  } catch (err: any) {
+    console.error('Failed to load ad analytics:', err)
+    error.value = err.message || 'Failed to load ad analytics'
+  } finally {
+    adAnalyticsLoading.value = false
   }
 }
 
@@ -1988,6 +2185,8 @@ watch(activeTab, (newTab) => {
     loadAnalytics()
   } else if (newTab === 'shareAnalytics') {
     loadShareAnalytics()
+  } else if (newTab === 'adAnalytics') {
+    loadAdAnalytics()
   } else if (newTab === 'visitorAnalytics') {
     loadVisitorAnalytics()
   } else if (newTab === 'videos') {

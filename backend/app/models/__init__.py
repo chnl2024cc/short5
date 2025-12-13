@@ -7,6 +7,7 @@ from app.models.user_liked_video import UserLikedVideo
 from app.models.report import Report
 from app.models.share import ShareLink
 from app.models.share_click import ShareClick
+from app.models.ad_click import AdClick
 from app.models.visitor_log import VisitorLog
 
-__all__ = ["User", "Video", "Vote", "View", "UserLikedVideo", "Report", "ShareLink", "ShareClick", "VisitorLog"]
+__all__ = ["User", "Video", "Vote", "View", "UserLikedVideo", "Report", "ShareLink", "ShareClick", "AdClick", "VisitorLog"]

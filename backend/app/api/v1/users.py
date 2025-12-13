@@ -248,6 +248,7 @@ async def get_liked_videos(
                     url_mp4=video.url_mp4,
                     duration_seconds=video.duration_seconds,
                     error_reason=video.error_reason,  # Include error reason if video failed
+                    ad_link=video.ad_link,
                     user=UserBasic(id=str(user.id), username=user.username),
                     stats=VideoStats(
                         likes=likes_count.scalar() or 0,
@@ -320,6 +321,7 @@ async def get_liked_videos(
                         url_mp4=video.url_mp4,
                         duration_seconds=video.duration_seconds,
                         error_reason=video.error_reason,
+                        ad_link=video.ad_link,
                         user=UserBasic(id=str(user.id), username=user.username),
                         stats=VideoStats(
                             likes=likes_count.scalar() or 0,
@@ -475,6 +477,7 @@ async def get_my_videos(
                 url_mp4=video.url_mp4,
                 duration_seconds=video.duration_seconds,
                 error_reason=video.error_reason,  # Include error reason if video failed
+                ad_link=video.ad_link,
                 user=UserBasic(id=str(user.id), username=user.username),
                 stats=VideoStats(
                     likes=likes_count.scalar() or 0,

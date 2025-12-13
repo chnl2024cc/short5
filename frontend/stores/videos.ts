@@ -57,7 +57,7 @@ export const useVideosStore = defineStore('videos', {
       await api.post(`/videos/${videoId}/vote`, votePayload)
     },
 
-    async uploadVideo(file: File, title?: string, description?: string) {
+    async uploadVideo(file: File, title?: string, description?: string, ad_link?: string) {
       const authStore = useAuthStore()
       
       // Ensure auth store is initialized
@@ -81,6 +81,7 @@ export const useVideosStore = defineStore('videos', {
         formData.append('file', file)
         if (title) formData.append('title', title)
         if (description) formData.append('description', description)
+        if (ad_link) formData.append('ad_link', ad_link)
         
         const response = await api.post('/videos/upload', formData)
         return response

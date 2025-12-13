@@ -22,3 +22,5 @@
 \i /docker-entrypoint-initdb.d/migrations/000_migration_tracking.sql
 \i /docker-entrypoint-initdb.d/migrations/001_initial_schema.sql
 \i /docker-entrypoint-initdb.d/migrations/002_visitor_analytics.sql
+\i /docker-entrypoint-initdb.d/migrations/003_add_ad_link_to_videos.sql
+\i /docker-entrypoint-initdb.d/migrations/004_add_ad_clicks_table.sql

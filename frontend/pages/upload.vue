@@ -117,6 +117,24 @@
           </p>
         </div>
 
+        <!-- Ad Link Input (Admin Only) -->
+        <div v-if="authStore.user?.is_admin" class="space-y-2">
+          <label for="ad_link" class="block text-sm font-medium text-gray-300 mb-2">
+            {{ t('upload.adLinkLabel') }} <span class="text-xs text-gray-500">({{ t('upload.adminOnly') }})</span>
+          </label>
+          <input
+            id="ad_link"
+            v-model="form.ad_link"
+            type="url"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            :placeholder="t('upload.adLinkPlaceholder')"
+            :disabled="uploading"
+          />
+          <p class="text-xs text-gray-500">
+            {{ t('upload.adLinkHint') }}
+          </p>
+        </div>
+
         <!-- Error Message -->
         <div v-if="error" class="bg-red-900/50 border border-red-700 rounded-lg p-3">
           <p class="text-sm text-red-300">{{ error }}</p>
@@ -220,6 +238,7 @@ const isDragging = ref(false)
 const form = ref({
   title: '',
   description: '',
+  ad_link: '',
 })
 
 const uploading = ref(false)
@@ -356,7 +375,8 @@ const handleUpload = async () => {
     const uploadResponse = (await videosStore.uploadVideo(
       selectedFile.value,
       form.value.title || undefined,
-      form.value.description || undefined
+      form.value.description || undefined,
+      form.value.ad_link || undefined
     )) as { video_id: string; status: string; message?: string }
     
     if (progressInterval) {

@@ -25,6 +25,7 @@ export interface Video {
   url_mp4: string // Required - fail fast if missing
   duration_seconds?: number | null
   error_reason?: string | null
+  ad_link?: string | null  // External link for ad videos
   user: VideoUser
   stats: VideoStats
   created_at: string // ISO datetime string

@@ -680,6 +680,25 @@ def process_video(self, video_id: str, file_path: str):
         has_faststart = metadata["has_faststart"]
         is_web_optimized = metadata["is_web_optimized"]
         
+        # Check if this is an ad video and validate minimum duration
+        with SessionLocal() as session:
+            video_check = session.execute(
+                text("SELECT ad_link FROM videos WHERE id = :video_id"),
+                {"video_id": video_id}
+            ).fetchone()
+            
+            if video_check and video_check[0]:  # ad_link is set
+                if duration < 5.0:
+                    error_category = "VALIDATION_ERROR"
+                    user_friendly_error = f"Ad videos must be at least 5 seconds long. This video is {duration:.1f} seconds."
+                    print(f"✗ {user_friendly_error}")
+                    update_video_status(
+                        video_id, 
+                        "failed", 
+                        error_reason=user_friendly_error
+                    )
+                    raise ValueError(user_friendly_error)
+        
         # Create output directory
         output_dir = TEMP_DIR / video_id
         output_dir.mkdir(exist_ok=True)

@@ -155,6 +155,10 @@ export const translations = {
     descriptionLabel: 'Описание (необязательно)',
     descriptionPlaceholder: 'Опишите ваше видео...',
     charactersCount: 'символов',
+    adLinkLabel: 'Ссылка на рекламу (Партнерская)',
+    adLinkPlaceholder: 'https://example.com/affiliate-link',
+    adLinkHint: 'Внешняя ссылка, которая откроется при клике на видео. Только для администраторов.',
+    adminOnly: 'Только для администраторов',
     uploadVideo: 'Загрузить видео',
     uploading: 'Загрузка...',
     videoUploaded: 'Видео успешно загружено! Обработка началась.',
@@ -283,6 +287,9 @@ export const translations = {
     checkOutVideo: 'Посмотрите это видео',
     shareLink: 'Поделитесь этой ссылкой',
     playVideo: 'Воспроизвести видео',
+    skipAd: 'Пропустить рекламу',
+    goToOffer: 'Перейти на сайт',
+    adVideoClickHint: 'Нажмите, чтобы перейти к предложению',
   },
 
   // Components - ActionHintOverlay
