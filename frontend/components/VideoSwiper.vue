@@ -412,6 +412,7 @@ const isAdVideo = computed(() => !!props.video.ad_link)
 const adSkipTimeRemaining = ref(5) // seconds
 const canSkipAd = ref(false)
 let adSkipInterval: NodeJS.Timeout | null = null
+const adVideoStartTime = ref<number | null>(null) // Track when ad video started playing
 
 // Report dialog state
 const showReportDialog = ref(false)
@@ -703,8 +704,8 @@ const processGestureUpdate = (e: TouchEvent | MouseEvent) => {
   currentX.value = coords.x
   currentY.value = coords.y
   
-  // Prevent swipe direction detection on ad videos during first 5 seconds
-  if (isAdVideo.value && !canSkipAd.value) {
+  // Prevent ALL swipe direction detection on ad videos - users can only skip via the skip button
+  if (isAdVideo.value) {
     swipeDirection.value = null
     // Clear RAF ID after processing
     rafGestureId = null
@@ -770,9 +771,9 @@ const updateGesture = (e: TouchEvent | MouseEvent) => {
 const endGesture = (e?: TouchEvent) => {
   if (!isDragging.value) return
   
-  // Prevent swipe if ad video and skip time hasn't elapsed
-  if (isAdVideo.value && !canSkipAd.value) {
-    // Don't process swipe - user must wait for skip timer
+  // Prevent ALL swipes on ad videos - users can only skip via the skip button
+  if (isAdVideo.value) {
+    // Don't allow swiping ad videos away - users must use the skip button
     isDragging.value = false
     swipeDirection.value = null
     return
@@ -827,19 +828,11 @@ const endGesture = (e?: TouchEvent) => {
     // Horizontal swipe = Like/Not Like
     const swipeDir = swipeDirection.value as 'like' | 'not_like'
     
-    // Prevent ALL swipes on ad videos during first 5 seconds
-    if (isAdVideo.value && !canSkipAd.value) {
-      // Don't process swipe - user must wait for skip timer
+    // Prevent ALL swipes on ad videos - users can only skip via the skip button
+    if (isAdVideo.value) {
+      // Don't allow swiping ad videos away - users must use the skip button
       isDragging.value = false
       swipeDirection.value = null
-      return
-    }
-    
-    // For ad videos after 5 seconds: allow skip to next video but don't record vote
-    if (isAdVideo.value) {
-      // Skip to next video without recording any interaction/vote
-      emit('swiped', swipeDir)
-      // Don't call voteOnVideo - we're just skipping, not interacting with the ad
       return
     }
     
@@ -847,8 +840,15 @@ const endGesture = (e?: TouchEvent) => {
     emit('swiped', swipeDir)
     videosStore.voteOnVideo(props.video.id, swipeDir)
   } else if (isTap) {
-    // Tap = Toggle play/pause (only if no swipe occurred)
-    togglePlayPause()
+    // Tap behavior
+    if (isAdVideo.value && props.video.ad_link) {
+      // For ad videos, tap opens the ad link
+      trackAdClick()
+      window.open(props.video.ad_link, '_blank', 'noopener,noreferrer')
+    } else {
+      // Normal video: Toggle play/pause
+      togglePlayPause()
+    }
   }
   
   // Reset state AFTER processing
@@ -1037,7 +1037,7 @@ watch(
   () => props.video.id,
   (newId, oldId) => {
     if (newId !== oldId && process.client) {
-      // Clean up previous video
+      // Clean up previous video (this also clears ad interval)
       cleanupVideo()
       // Small delay to ensure DOM is updated
       nextTick(() => {
@@ -1078,6 +1078,16 @@ const cleanupVideo = () => {
   // Reset share button state for new video
   showShareButton.value = false
   shareButtonDismissed.value = false
+  // Reset ad video state
+  adVideoStartTime.value = null
+  // Clear ad skip interval
+  if (adSkipInterval) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[AdTimer] Cleaning up interval in cleanupVideo')
+    }
+    clearInterval(adSkipInterval)
+    adSkipInterval = null
+  }
   // Clear timeouts
   if (retryTimeout) {
     clearTimeout(retryTimeout)
@@ -1175,6 +1185,22 @@ const onTimeUpdate = () => {
     const duration = videoElement.value.duration
     const now = Date.now()
     
+    // For ad videos: Fallback mechanism - enable skip after 5 seconds of actual playback
+    // This works even if the countdown timer didn't run properly
+    if (isAdVideo.value && !canSkipAd.value && currentTime >= 5) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[AdTimer] Fallback triggered: 5 seconds of playback elapsed for video:', props.video.id, 'currentTime:', currentTime)
+      }
+      canSkipAd.value = true
+      // Clean up countdown timer if it's still running
+      if (adSkipInterval) {
+        clearInterval(adSkipInterval)
+        adSkipInterval = null
+      }
+      // Update the remaining time display to 0
+      adSkipTimeRemaining.value = 0
+    }
+    
     // Detect video loop by checking if currentTime resets to near 0
     // This check runs every timeupdate to ensure we catch loops accurately
     if (duration > 0 && lastVideoTime.value > duration * 0.9 && currentTime < duration * 0.1) {
@@ -1246,17 +1272,36 @@ const onVideoPlay = () => {
 
 // Watch for ad video and initialize skip timer
 watch(() => [props.video.ad_link, props.isActive], ([adLink, isActive]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[AdTimer] Watch triggered:', { adLink: !!adLink, isActive, videoId: props.video.id })
+  }
+  
   if (adLink && isActive) {
     // Reset skip timer when ad video becomes active
     canSkipAd.value = false
     adSkipTimeRemaining.value = 5
+    adVideoStartTime.value = Date.now()
     
-    // Start countdown
-    if (adSkipInterval) clearInterval(adSkipInterval)
+    // Clear any existing interval first
+    if (adSkipInterval) {
+      clearInterval(adSkipInterval)
+      adSkipInterval = null
+    }
+    
+    // Start countdown timer (primary mechanism)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[AdTimer] Starting countdown timer for video:', props.video.id)
+    }
     adSkipInterval = setInterval(() => {
       adSkipTimeRemaining.value--
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[AdTimer] Countdown:', adSkipTimeRemaining.value, 'for video:', props.video.id)
+      }
       if (adSkipTimeRemaining.value <= 0) {
         canSkipAd.value = true
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[AdTimer] Countdown finished, skip enabled for video:', props.video.id)
+        }
         if (adSkipInterval) {
           clearInterval(adSkipInterval)
           adSkipInterval = null
@@ -1266,12 +1311,16 @@ watch(() => [props.video.ad_link, props.isActive], ([adLink, isActive]) => {
   } else {
     // Clean up interval
     if (adSkipInterval) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[AdTimer] Cleaning up interval for video:', props.video.id)
+      }
       clearInterval(adSkipInterval)
       adSkipInterval = null
     }
     canSkipAd.value = true
+    adVideoStartTime.value = null
   }
-})
+}, { immediate: true })
 
 onMounted(() => {
   if (process.client) {
