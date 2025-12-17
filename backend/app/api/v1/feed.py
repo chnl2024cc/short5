@@ -1,7 +1,7 @@
 """
 Feed Endpoint - Simple Video Feed
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, cast, String
 from typing import Optional
@@ -45,12 +45,18 @@ def calculate_video_score(
 
 @router.get("", response_model=FeedResponse)
 async def get_feed(
+    response: Response,
     db: AsyncSession = Depends(get_db),
     session_id: Optional[str] = Query(None, description="Session ID to filter out voted videos"),
     cursor: Optional[str] = Query(None, description="Cursor for pagination (ISO 8601 datetime)"),
-    limit: int = Query(10, ge=1, le=50, description="Maximum number of videos to return"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum number of videos to return"),
 ):
     """Get simple video feed - shows videos not voted on by the current session"""
+    # Explicitly disable caching - always return fresh data
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
     try:
         logger.info(f"[FEED] Getting feed (session_id: {session_id}, limit: {limit})")
         
@@ -152,7 +158,7 @@ async def get_feed(
         # Take top N
         top_videos = scored_videos[:limit]
         
-        # Build response using cached stats
+        # Build response using pre-fetched stats (no caching - fresh data every time)
         videos = []
         for score, video, user, likes, views in top_videos:
             try:
@@ -179,13 +185,52 @@ async def get_feed(
                 logger.warning(f"[FEED] Error building response for video {video.id}: {e}")
                 continue
         
-        # Determine next cursor
+        # Determine next cursor and has_more
+        # Always check if there are more videos available, regardless of how many we returned.
+        # This is important because we might have filtered out many videos (voted on, missing url_mp4),
+        # but there could still be more videos in the database.
         next_cursor = None
-        has_more = len(candidates) > limit
+        has_more = False
         
-        if has_more and videos:
+        if videos:
             last_video = videos[-1]
-            next_cursor = last_video.created_at.isoformat()
+            
+            # Always check if there are more videos available beyond the cursor
+            # This ensures we continue loading even if we got fewer videos than requested
+            # (which can happen if many videos were filtered out)
+            check_more_query = (
+                select(Video.id)
+                .where(
+                    Video.status == VideoStatus.READY,
+                    Video.url_mp4.isnot(None),
+                    Video.url_mp4 != "",
+                    Video.created_at < last_video.created_at
+                )
+            )
+            
+            # Apply same filters as main query (session-based exclusion)
+            if session_id:
+                try:
+                    session_uuid = UUID(session_id)
+                    voted_videos = await db.execute(
+                        select(Vote.video_id).where(
+                            Vote.session_id == session_uuid
+                        )
+                    )
+                    voted_video_ids = [row[0] for row in voted_videos.all()]
+                    if voted_video_ids:
+                        check_more_query = check_more_query.where(Video.id.notin_(voted_video_ids))
+                except (ValueError, Exception):
+                    pass
+            
+            # Check if there's at least one more video available
+            more_result = await db.execute(check_more_query.limit(1))
+            has_more = more_result.first() is not None
+            
+            if has_more:
+                next_cursor = last_video.created_at.isoformat()
+            else:
+                logger.info(f"[FEED] No more videos available for session {session_id} after cursor {last_video.created_at}")
         
         return FeedResponse(
             videos=videos,

@@ -160,7 +160,29 @@ const loadFeed = async (cursor?: string) => {
   
   loading.value = true
   try {
-    const response = await api.get<FeedResponse>(`/feed${cursor ? `?cursor=${cursor}` : ''}`)
+    // Get session ID to exclude voted videos
+    let sessionId: string | null = null
+    if (process.client) {
+      const { useSession } = await import('~/composables/useSession')
+      const { getOrCreateSessionId } = useSession()
+      sessionId = getOrCreateSessionId()
+    }
+    
+    // Build query parameters - request more videos per batch
+    const params = new URLSearchParams()
+    if (cursor) {
+      params.append('cursor', cursor)
+    }
+    if (sessionId) {
+      params.append('session_id', sessionId)
+    }
+    // Request 50 videos per batch (max allowed) for better feed population
+    params.append('limit', '50')
+    
+    const queryString = params.toString()
+    // Add cache-busting timestamp to ensure no caching
+    const cacheBuster = `&_t=${Date.now()}`
+    const response = await api.get<FeedResponse>(`/feed?${queryString}${cacheBuster}`)
     
     // Filter out videos without url_mp4 - skip them instead of failing
     const validVideos = (response.videos || []).filter((video) => {
@@ -194,6 +216,47 @@ const loadFeed = async (cursor?: string) => {
     
     nextCursor.value = response.next_cursor
     hasMore.value = response.has_more
+    
+    console.log(`[Feed] Loaded ${validVideos.length} videos (requested 50), hasMore: ${response.has_more}, nextCursor: ${response.next_cursor ? 'yes' : 'no'}`)
+    
+    // On initial load, aggressively load more videos to build up a large queue
+    // This ensures users have many videos ready to watch
+    if (!cursor && hasMore.value && nextCursor.value) {
+      const targetQueueSize = 150 // Target 150+ videos in the queue
+      if (videos.value.length < targetQueueSize) {
+        console.log(`[Feed] Initial load: ${videos.value.length} videos, loading more to reach ${targetQueueSize}`)
+        // Sequentially load more batches to build up the queue
+        // We'll load them one after another, each using the previous batch's cursor
+        const loadMoreBatches = async (currentCursor: string, batchesRemaining: number) => {
+          if (batchesRemaining <= 0 || !hasMore.value || videos.value.length >= targetQueueSize) {
+            return
+          }
+          try {
+            // Wait a bit to avoid overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 100))
+            await loadFeed(currentCursor)
+            // After loading, check if we need more and continue
+            if (hasMore.value && videos.value.length < targetQueueSize && nextCursor.value) {
+              await loadMoreBatches(nextCursor.value, batchesRemaining - 1)
+            }
+          } catch (err) {
+            console.error('[Feed] Failed to load batch:', err)
+          }
+        }
+        // Start loading more batches in the background (non-blocking)
+        loadMoreBatches(nextCursor.value, 3).catch(err => {
+          console.error('[Feed] Error in batch loading:', err)
+        })
+      }
+    }
+    
+    // If we got fewer videos than expected, immediately load more
+    if (validVideos.length < 20 && hasMore.value) {
+      console.log(`[Feed] Got only ${validVideos.length} videos, loading more immediately`)
+      loadFeed(nextCursor.value || undefined).catch(err => {
+        console.error('[Feed] Failed to load more videos:', err)
+      })
+    }
     
     // Check if we're looking for a specific video (from route query or targetVideoId)
     const routeVideoId = route.query.video as string | undefined
@@ -232,8 +295,13 @@ const loadFeed = async (cursor?: string) => {
       }
     }
     
-    // Preload next videos if needed
-    if (hasMore.value && videos.value.length - currentIndex.value < preloadCount + 1) {
+    // Preload next videos if needed - maintain a large buffer
+    // Since videos are lazy-loaded, we can keep many in the array
+    const remainingVideos = videos.value.length - currentIndex.value
+    const minBufferSize = 50 // Keep at least 50 videos ahead (since we load 50 per batch)
+    
+    if (hasMore.value && remainingVideos < minBufferSize) {
+      console.log(`[Feed] Preloading more videos (remaining: ${remainingVideos}, target buffer: ${minBufferSize})`)
       await loadFeed(nextCursor.value || undefined)
     }
   } catch (error) {
