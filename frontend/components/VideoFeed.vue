@@ -47,7 +47,7 @@
         :video="video"
         :is-active="index === 0"
         class="absolute inset-0"
-        :style="{ zIndex: videos.length - (currentIndex + index) }"
+        :style="{ zIndex: 10 - index }"
         @swiped="handleSwipe"
         @view-update="handleViewUpdate"
         @error="handleVideoError"
