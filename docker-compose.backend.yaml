@@ -30,6 +30,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: short5_redis
+    command: redis-server --protected-mode no
     volumes:
       - redis_data:/data
     healthcheck:

@@ -10,9 +10,6 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://short5_user:short5_password@localhost:5432/short5_db"
     
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
-    
     # Backend
     # Read from BACKEND_BASE_URL environment variable
     # Default is for development only. In production, this MUST be set via environment variable.
