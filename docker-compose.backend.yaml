@@ -62,10 +62,12 @@ services:
       # CORS origins - should include frontend URL
       CORS_ORIGINS: ${FRONTEND_BASE_URL}
       GEOIP_DB_PATH: ${GEOIP_DB_PATH:-/app/geodata/dbip-city-lite-2025-12.mmdb}
+    # Port mapping - controlled by BACKEND_PORTS_MAPPING environment variable
+    # For local development: Use host:container format like "8000:8000" or "8080:8000"
+    # For Coolify: Use container port only like "8000" (Coolify handles host mapping via Traefik)
+    # Note: Coolify accepts "8000" but NOT "8080:8080" format
     ports:
-      # Port mapping for local development
-      # In Coolify: This is ignored - Traefik handles routing automatically
-      - "8000:8000"
+      - "${BACKEND_PORTS_MAPPING:-8000:8000}"
     volumes:
       - backend_uploads:/app/uploads
       - ./geodata:/app/geodata:ro
