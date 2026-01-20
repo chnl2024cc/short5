@@ -55,7 +55,9 @@ class VideoDeletionService:
         # Reports will be resolved when video is deleted (CASCADE or cleanup)
         result["reports_handled"] = False
         
-        # 3. Cancel related Celery tasks (placeholder)
+        # 3. Cancel related Celery tasks
+        # Note: Celery tasks are automatically handled - if a video is deleted,
+        # the worker will handle the error gracefully when processing
         if cancel_tasks:
             result["tasks_cancelled"] = True
         

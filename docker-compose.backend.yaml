@@ -135,4 +135,5 @@ volumes:
   redis_data:
   backend_uploads:
   video_worker_temp:
+  pgadmin-data:
 
