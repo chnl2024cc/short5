@@ -49,7 +49,7 @@ services:
     container_name: short5_backend
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-short5_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-short5_db}
-      REDIS_URL: redis://redis:6379/0
+      # REDIS_URL removed - not used in backend code (only Celery URLs are needed)
       # Use SERVICE_URL_BACKEND from Coolify for the backend URL
       BACKEND_BASE_URL: ${SERVICE_URL_BACKEND}
       ENVIRONMENT: ${ENVIRONMENT:-production}
@@ -70,8 +70,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      video_worker:
-        condition: service_healthy
+      # Note: video_worker dependency removed - backend can start without worker
+      # Tasks will queue in Redis until worker is ready
     # Production command (no reload)
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     healthcheck:
