@@ -62,6 +62,10 @@ services:
       # CORS origins - should include frontend URL
       CORS_ORIGINS: ${FRONTEND_BASE_URL}
       GEOIP_DB_PATH: ${GEOIP_DB_PATH:-/app/geodata/dbip-city-lite-2025-12.mmdb}
+    ports:
+      # Port mapping for local development
+      # In Coolify: This is ignored - Traefik handles routing automatically
+      - "8000:8000"
     volumes:
       - backend_uploads:/app/uploads
       - ./geodata:/app/geodata:ro
